@@ -44,12 +44,14 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:tray_manager/tray_manager.dart';
 import 'package:universal_html/html.dart' as html;
+import 'package:xdg_status_notifier_item/xdg_status_notifier_item.dart' as sni;
 import 'package:universal_io/io.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:windows_taskbar/windows_taskbar.dart';
 
 bool isAuthing = false;
 final systemTray = st.SystemTray();
+sni.StatusNotifierItemClient? sniClient;
 
 @pragma('vm:entry-point')
 //ignore: prefer_void_to_null
@@ -513,7 +515,8 @@ class _HomeState extends OptimizedState<Home> with WidgetsBindingObserver, TrayL
               onTrayIconRightMouseDown();
             }
           });
-        } else {
+        } else if (!Platform.isLinux) {
+          // macOS or other platforms - Linux uses SNI callbacks wired in constructor
           trayManager.addListener(this);
         }
 
@@ -540,7 +543,8 @@ class _HomeState extends OptimizedState<Home> with WidgetsBindingObserver, TrayL
   void onTrayIconRightMouseDown() async {
     if (Platform.isWindows) {
       await systemTray.popUpContextMenu();
-    } else {
+    } else if (!Platform.isLinux) {
+      // macOS or other platforms - Linux SNI host handles menu natively
       await trayManager.popUpContextMenu();
     }
   }
@@ -569,6 +573,9 @@ class _HomeState extends OptimizedState<Home> with WidgetsBindingObserver, TrayL
     WidgetsBinding.instance.removeObserver(this);
     windowManager.removeListener(DesktopWindowListener.instance);
     if (Platform.isLinux) {
+      sniClient?.close();
+    } else if (!Platform.isWindows) {
+      // macOS or other platforms
       trayManager.removeListener(this);
     }
     super.dispose();
@@ -652,13 +659,69 @@ class _HomeState extends OptimizedState<Home> with WidgetsBindingObserver, TrayL
   }
 }
 
+sni.DBusMenuItem _buildLinuxMenu({bool windowHidden = false}) {
+  return sni.DBusMenuItem(children: [
+    sni.DBusMenuItem(
+      label: windowHidden ? 'Show App' : 'Hide App',
+      onClicked: () async {
+        if (windowHidden) {
+          await windowManager.show();
+        } else {
+          await windowManager.hide();
+        }
+      },
+    ),
+    sni.DBusMenuItem.separator(),
+    sni.DBusMenuItem(
+      label: 'Close App',
+      onClicked: () async {
+        if (await windowManager.isPreventClose()) {
+          await windowManager.setPreventClose(false);
+        }
+        await windowManager.close();
+      },
+    ),
+  ]);
+}
+
 Future<void> initSystemTray() async {
   if (Platform.isWindows) {
     await systemTray.initSystemTray(
       iconPath: 'assets/icon/icon.ico',
       toolTip: "BlueBubbles",
     );
+    await setSystemTrayContextMenu(windowHidden: !appWindow.isVisible);
+  } else if (Platform.isLinux) {
+    String iconName;
+    if (isFlatpak) {
+      iconName = 'app.bluebubbles.BlueBubbles';
+    } else if (isSnap) {
+      iconName = p.joinAll([p.dirname(Platform.resolvedExecutable), 'data/flutter_assets/assets/icon', 'icon.png']);
+    } else {
+      iconName = 'assets/icon/icon.png';
+    }
+
+    print('[TRAY] Initializing StatusNotifierItemClient with iconName: $iconName');
+    try {
+      sniClient = sni.StatusNotifierItemClient(
+        id: 'bluebubbles',
+        iconName: iconName,
+        title: 'BlueBubbles',
+        menu: _buildLinuxMenu(windowHidden: !appWindow.isVisible),
+        onActivate: (int x, int y) async {
+          print('[TRAY] onActivate called at ($x, $y)');
+          await windowManager.show();
+        },
+      );
+      print('[TRAY] StatusNotifierItemClient created, calling connect()...');
+      await sniClient!.connect();
+      print('[TRAY] StatusNotifierItemClient connected successfully');
+    } catch (e, stack) {
+      print('[TRAY] Failed to initialize StatusNotifierItemClient: $e');
+      print('[TRAY] Stack: $stack');
+    }
   } else {
+    // macOS or other platforms - use tray_manager
     String path;
     if (isFlatpak) {
       path = 'app.bluebubbles.BlueBubbles';
@@ -669,9 +732,8 @@ Future<void> initSystemTray() async {
     }
 
     await trayManager.setIcon(path);
+    await setSystemTrayContextMenu(windowHidden: !appWindow.isVisible);
   }
-
-  await setSystemTrayContextMenu(windowHidden: !appWindow.isVisible);
 }
 
 Future<void> setSystemTrayContextMenu({bool windowHidden = false}) async {
@@ -701,7 +763,10 @@ Future<void> setSystemTrayContextMenu({bool windowHidden = false}) async {
     ]);
 
     await systemTray.setContextMenu(menu);
+  } else if (Platform.isLinux) {
+    sniClient?.updateMenu(_buildLinuxMenu(windowHidden: windowHidden));
   } else {
+    // macOS or other platforms
     await trayManager.setContextMenu(Menu(
       items: [
         MenuItem(label: windowHidden ? 'Show App' : 'Hide App', key: windowHidden ? 'show_app' : 'hide_app'),

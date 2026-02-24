@@ -90,6 +90,12 @@ set_target_properties(${BINARY_NAME}
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# Workaround for tray_manager deprecation warnings with libappindicator
+# See: https://github.com/leanflutter/tray_manager/issues/67
+if(TARGET tray_manager_plugin)
+  target_compile_options(tray_manager_plugin PRIVATE -Wno-error=deprecated-declarations)
+endif()
+
 target_link_libraries(${BINARY_NAME} PRIVATE ${MIMALLOC_LIB})
 
 # === Installation ===
