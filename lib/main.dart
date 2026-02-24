@@ -698,7 +698,8 @@ Future<void> initSystemTray() async {
     } else if (isSnap) {
       iconName = p.joinAll([p.dirname(Platform.resolvedExecutable), 'data/flutter_assets/assets/icon', 'icon.png']);
     } else {
-      iconName = 'assets/icon/icon.png';
+      // Use the system-installed icon name (looks in /usr/share/pixmaps and icon theme paths)
+      iconName = 'bluebubbles';
     }
 
     print('[TRAY] Initializing StatusNotifierItemClient with iconName: $iconName');
