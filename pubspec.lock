@@ -1768,9 +1768,9 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: "838278324c1ce007303e45111e57c4a9b3ac01f1"
-      resolved-ref: "838278324c1ce007303e45111e57c4a9b3ac01f1"
-      url: "https://github.com/BlueBubblesApp/local_notifier.git"
+      ref: linux-notification-fixes
+      resolved-ref: "2b258e0170fefd0861e4ca9d13c5cb848fb0e7ae"
+      url: "https://github.com/cwelsys/local_notifier.git"
     source: git
     version: "0.1.6"
   logger:

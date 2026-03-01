@@ -108,8 +108,8 @@ dependencies:
   local_auth: ^2.3.0
   local_notifier:
     git:
-      url: https://github.com/BlueBubblesApp/local_notifier.git
-      ref: 838278324c1ce007303e45111e57c4a9b3ac01f1
+      url: https://github.com/cwelsys/local_notifier.git
+      ref: linux-notification-fixes
   maps_launcher: ^3.0.0+1
   logger: ^2.5.0
   media_kit: ^1.1.11                             # Primary package.

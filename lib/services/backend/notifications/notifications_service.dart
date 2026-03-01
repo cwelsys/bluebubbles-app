@@ -8,6 +8,7 @@ import 'package:bluebubbles/app/layouts/settings/pages/server/server_management_
 import 'package:bluebubbles/app/wrappers/theme_switcher.dart';
 import 'package:bluebubbles/helpers/helpers.dart';
 import 'package:bluebubbles/helpers/ui/facetime_helpers.dart';
+import 'package:bluebubbles/utils/logger/logger.dart';
 import 'package:bluebubbles/database/models.dart';
 import 'package:bluebubbles/database/database.dart';
 import 'package:bluebubbles/services/services.dart';
@@ -292,12 +293,14 @@ class NotificationsService extends GetxService {
 
     toast.onClick = () async {
       await windowManager.show();
+      await windowManager.focus();
     };
 
     if (callUuid != null) {
       toast.onClickAction = (index) async {
         if (actions[index] == "Answer") {
           await windowManager.show();
+          await windowManager.focus();
           await intents.answerFaceTime(callUuid);
         } else {
           hideFaceTimeOverlay(callUuid);
@@ -401,7 +404,8 @@ class NotificationsService extends GetxService {
       bool toasted = false;
       for (LocalNotification _toast in List.from(notifications[guid]!)) {
         if (_toast.body != body) {
-          await _toast.close();
+          notifications[guid]!.remove(_toast);
+          await _toast.destroy();
         } else {
           toasted = true;
         }
@@ -428,12 +432,15 @@ class NotificationsService extends GetxService {
       notifications[guid]!.add(toast);
 
       toast.onClick = () async {
+        Logger.debug('[Notif] onClick fired for chat $guid', tag: 'NotificationsService');
         notifications[guid]!.remove(toast);
         notificationCounts[guid] = 0;
 
         Chat? chat = Chat.findOne(guid: guid);
         if (chat == null) {
+          Logger.debug('[Notif] chat not found, showing window only', tag: 'NotificationsService');
           await windowManager.show();
+          await windowManager.focus();
           return;
         }
 
@@ -445,7 +452,9 @@ class NotificationsService extends GetxService {
           );
         }
 
+        Logger.debug('[Notif] showing and focusing window', tag: 'NotificationsService');
         await windowManager.show();
+        await windowManager.focus();
       };
 
       toast.onClickAction = (index) async {
@@ -523,7 +532,8 @@ class NotificationsService extends GetxService {
       bool toasted = false;
       for (LocalNotification _toast in List.from(notifications[guid]!)) {
         if (_toast.body != body) {
-          await _toast.close();
+          notifications[guid]!.remove(_toast);
+          await _toast.destroy();
         } else {
           toasted = true;
         }
@@ -551,6 +561,7 @@ class NotificationsService extends GetxService {
         Chat? chat = Chat.findOne(guid: guid);
         if (chat == null) {
           await windowManager.show();
+          await windowManager.focus();
           return;
         }
 
@@ -563,6 +574,7 @@ class NotificationsService extends GetxService {
         }
 
         await windowManager.show();
+        await windowManager.focus();
 
         if (await File(path).exists()) {
           await File(path).delete();
@@ -615,12 +627,12 @@ class NotificationsService extends GetxService {
   Future<void> showSummaryNotifDesktop(int count, Iterable<String> _chats, bool showMarkRead) async {
     for (String chat in _chats) {
       for (LocalNotification _toast in (notifications[chat] ?? [])) {
-        await _toast.close();
+        await _toast.destroy();
       }
       notifications[chat] = [];
     }
 
-    await allToast?.close();
+    await allToast?.destroy();
 
     String title = "$count messages";
     String body = "from ${_chats.length} chat${_chats.length == 1 ? "" : "s"}";
@@ -642,6 +654,7 @@ class NotificationsService extends GetxService {
       notifications = {};
       notificationCounts = {};
       await windowManager.show();
+      await windowManager.focus();
     };
 
     allToast!.onClickAction = (_) async {
@@ -677,6 +690,7 @@ class NotificationsService extends GetxService {
       socketToast!.onClick = () async {
         socketToast = null;
         await windowManager.show();
+        await windowManager.focus();
         Navigator.of(Get.context!).push(
           ThemeSwitcher.buildPageRoute(
             builder: (BuildContext context) {
@@ -733,6 +747,7 @@ class NotificationsService extends GetxService {
       aliasesToast!.onClick = () async {
         aliasesToast = null;
         await windowManager.show();
+        await windowManager.focus();
       };
 
       await aliasesToast!.show();
@@ -779,6 +794,7 @@ class NotificationsService extends GetxService {
       failedToast!.onClick = () async {
         failedToast = null;
         await windowManager.show();
+        await windowManager.focus();
         if (scheduled) {
           Navigator.of(Get.context!).push(
             ThemeSwitcher.buildPageRoute(
@@ -845,7 +861,7 @@ class NotificationsService extends GetxService {
       if (!notifications.containsKey(chatGuid)) return;
       List<LocalNotification> toasts = [...notifications[chatGuid]!];
       for (LocalNotification toast in toasts) {
-        await toast.close();
+        await toast.destroy();
       }
       notifications.remove(chatGuid);
       notificationCounts[chatGuid] = 0;
