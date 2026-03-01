@@ -44,6 +44,7 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:tray_manager/tray_manager.dart';
 import 'package:universal_html/html.dart' as html;
+import 'package:dbus/dbus.dart';
 import 'package:xdg_status_notifier_item/xdg_status_notifier_item.dart' as sni;
 import 'package:universal_io/io.dart';
 import 'package:window_manager/window_manager.dart';
@@ -52,6 +53,8 @@ import 'package:windows_taskbar/windows_taskbar.dart';
 bool isAuthing = false;
 final systemTray = st.SystemTray();
 sni.StatusNotifierItemClient? sniClient;
+DBusClient? _sniWatcherBus;
+StreamSubscription<DBusNameOwnerChangedEvent>? _sniWatcherSubscription;
 
 @pragma('vm:entry-point')
 //ignore: prefer_void_to_null
@@ -574,6 +577,8 @@ class _HomeState extends OptimizedState<Home> with WidgetsBindingObserver, TrayL
     windowManager.removeListener(DesktopWindowListener.instance);
     if (Platform.isLinux) {
       sniClient?.close();
+      _sniWatcherSubscription?.cancel();
+      _sniWatcherBus?.close();
     } else if (!Platform.isWindows) {
       // macOS or other platforms
       trayManager.removeListener(this);
@@ -684,6 +689,65 @@ sni.DBusMenuItem _buildLinuxMenu({bool windowHidden = false}) {
   ]);
 }
 
+/// Watches for the StatusNotifierWatcher to reappear (e.g. after DMS restart)
+/// and reconnects the SNI client when it does.
+void _startSniWatcherMonitor(String iconName) {
+  if (_sniWatcherSubscription != null) return;
+  _sniWatcherBus = DBusClient.session();
+  _sniWatcherSubscription = _sniWatcherBus!.nameOwnerChanged.listen((event) {
+    if (event.name == 'org.kde.StatusNotifierWatcher' && event.newOwner != null) {
+      print('[TRAY] StatusNotifierWatcher restarted, reconnecting...');
+      sniClient?.close().then((_) {
+        sniClient = null;
+        _connectSniWithRetry(iconName);
+      });
+    }
+  });
+}
+
+/// Connects the SNI client, retrying if StatusNotifierWatcher isn't on the bus yet.
+/// This is common at login: the tray host may register the watcher after the app starts.
+Future<void> _connectSniWithRetry(String iconName) async {
+  const maxRetries = 10;
+  const retryDelay = Duration(seconds: 2);
+
+  for (int attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      await Future.delayed(retryDelay);
+      print('[TRAY] Retrying SNI connection (attempt $attempt/$maxRetries)...');
+    } else {
+      print('[TRAY] Initializing StatusNotifierItemClient with iconName: $iconName');
+    }
+
+    try {
+      sniClient = sni.StatusNotifierItemClient(
+        id: 'bluebubbles',
+        iconName: iconName,
+        title: 'BlueBubbles',
+        menu: _buildLinuxMenu(windowHidden: !appWindow.isVisible),
+        onActivate: (int x, int y) async {
+          print('[TRAY] onActivate called at ($x, $y)');
+          await windowManager.show();
+        },
+      );
+      await sniClient!.connect();
+      print('[TRAY] StatusNotifierItemClient connected successfully');
+      _startSniWatcherMonitor(iconName);
+      return;
+    } catch (e, stack) {
+      // Close partially-registered client so the next attempt gets a clean slate
+      await sniClient?.close();
+      sniClient = null;
+      if (attempt >= maxRetries) {
+        print('[TRAY] Failed to initialize StatusNotifierItemClient after $maxRetries retries: $e');
+        print('[TRAY] Stack: $stack');
+      } else {
+        print('[TRAY] SNI connection attempt $attempt failed: $e');
+      }
+    }
+  }
+}
+
 Future<void> initSystemTray() async {
   if (Platform.isWindows) {
     await systemTray.initSystemTray(
@@ -702,25 +766,8 @@ Future<void> initSystemTray() async {
       iconName = 'bluebubbles';
     }
 
-    print('[TRAY] Initializing StatusNotifierItemClient with iconName: $iconName');
-    try {
-      sniClient = sni.StatusNotifierItemClient(
-        id: 'bluebubbles',
-        iconName: iconName,
-        title: 'BlueBubbles',
-        menu: _buildLinuxMenu(windowHidden: !appWindow.isVisible),
-        onActivate: (int x, int y) async {
-          print('[TRAY] onActivate called at ($x, $y)');
-          await windowManager.show();
-        },
-      );
-      print('[TRAY] StatusNotifierItemClient created, calling connect()...');
-      await sniClient!.connect();
-      print('[TRAY] StatusNotifierItemClient connected successfully');
-    } catch (e, stack) {
-      print('[TRAY] Failed to initialize StatusNotifierItemClient: $e');
-      print('[TRAY] Stack: $stack');
-    }
+    // Connect in background - StatusNotifierWatcher may not be on the bus yet at startup
+    _connectSniWithRetry(iconName);
   } else {
     // macOS or other platforms - use tray_manager
     String path;
