@@ -12,6 +12,7 @@ import 'package:bluebubbles/helpers/backend/startup_tasks.dart';
 import 'package:bluebubbles/helpers/helpers.dart';
 import 'package:bluebubbles/services/network/http_overrides.dart';
 import 'package:bluebubbles/utils/logger/logger.dart';
+import 'package:bluebubbles/utils/linux_tray.dart';
 import 'package:bluebubbles/utils/media_kit_hot_restart_fix.dart'
     if (dart.library.html) 'package:bluebubbles/utils/media_kit_hot_restart_fix_web.dart';
 import 'package:bluebubbles/utils/window_effects.dart';
@@ -576,7 +577,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver, TrayListener {
 
         /* ----- SYSTEM TRAY INITIALIZATION ----- */
         await initSystemTray();
-        trayManager.addListener(this);
+        // Linux runs on SNI instead of tray_manager, and drives its callbacks directly.
+        if (!Platform.isLinux) trayManager.addListener(this);
       }
 
       if (!SettingsSvc.settings.finishedSetup.value) {
@@ -622,7 +624,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver, TrayListener {
     // Clean up observer when app is fully closed
     WidgetsBinding.instance.removeObserver(this);
     windowManager.removeListener(DesktopWindowListener.instance);
-    if (kIsDesktop) {
+    if (Platform.isLinux) {
+      LinuxTray.dispose();
+    } else if (kIsDesktop) {
       trayManager.removeListener(this);
     }
     super.dispose();
@@ -695,8 +699,21 @@ Future<void> initSystemTray() async {
     path = 'app.bluebubbles.BlueBubbles';
   } else if (isSnap) {
     path = p.joinAll([p.dirname(Platform.resolvedExecutable), 'data/flutter_assets/assets/icon', 'icon.png']);
+  } else if (Platform.isLinux) {
+    // SNI resolves a theme icon name or an absolute path, never a relative asset path.
+    path = 'bluebubbles';
   } else {
     path = 'assets/icon/icon.png';
+  }
+
+  if (Platform.isLinux) {
+    await LinuxTray.init(
+      iconName: path,
+      title: 'BlueBubbles',
+      onActivate: showAndFocusWindow,
+      menu: _linuxTrayMenu(windowHidden: !appWindow.isVisible),
+    );
+    return;
   }
 
   await trayManager.setIcon(path);
@@ -704,7 +721,29 @@ Future<void> initSystemTray() async {
   await setSystemTrayContextMenu(windowHidden: !appWindow.isVisible);
 }
 
+List<LinuxTrayMenuItem> _linuxTrayMenu({bool windowHidden = false}) {
+  return [
+    LinuxTrayMenuItem(
+      label: windowHidden ? 'Show App' : 'Hide App',
+      onClicked: windowHidden ? showAndFocusWindow : windowManager.hide,
+    ),
+    const LinuxTrayMenuItem.separator(),
+    LinuxTrayMenuItem(
+      label: 'Close App',
+      onClicked: () async {
+        await windowManager.setPreventClose(false);
+        await windowManager.close();
+      },
+    ),
+  ];
+}
+
 Future<void> setSystemTrayContextMenu({bool windowHidden = false}) async {
+  if (Platform.isLinux) {
+    await LinuxTray.setMenu(_linuxTrayMenu(windowHidden: windowHidden));
+    return;
+  }
+
   await trayManager.setContextMenu(Menu(
     items: [
       MenuItem(label: windowHidden ? 'Show App' : 'Hide App', key: windowHidden ? 'show_app' : 'hide_app'),

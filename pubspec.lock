@@ -538,7 +538,7 @@ packages:
     source: hosted
     version: "3.1.7"
   dbus:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: dbus
       sha256: d0c98dcd4f5169878b6cf8f6e0a52403a9dff371a3e2f019697accbf6f44a270
@@ -3421,6 +3421,15 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.0"
+  xdg_status_notifier_item:
+    dependency: "direct main"
+    description:
+      path: "."
+      ref: main
+      resolved-ref: eebdaa656fec9964cb1f3c7901562104c3dbc57c
+      url: "https://github.com/cwelsys/xdg_status_notifier_item.dart.git"
+    source: git
+    version: "0.0.2"
   xml:
     dependency: transitive
     description:

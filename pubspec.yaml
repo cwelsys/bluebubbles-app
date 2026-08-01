@@ -168,7 +168,12 @@ dependencies:
   synchronized: ^3.3.0+3
   supercharged: ^2.1.1
   system_info2: ^4.0.0
-  tray_manager: ^0.5.1
+  tray_manager: ^0.5.1 # linux tray goes through xdg_status_notifier_item instead, see lib/utils/linux_tray.dart
+  dbus: ^0.7.11 # linux tray
+  xdg_status_notifier_item: # linux tray icon left-click, which tray_manager's appindicator backend can't do
+    git:
+      url: https://github.com/cwelsys/xdg_status_notifier_item.dart.git
+      ref: main
   unicode_emojis: ^0.5.1
   unifiedpush: ^5.0.2 # don't upgrade to v6 as it breaks the build. Might be due to firestore package conflicts.
   universal_html: ^2.2.4 # cross-platform dart:html implementation
