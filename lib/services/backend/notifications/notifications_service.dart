@@ -587,19 +587,33 @@ class NotificationsService {
   }
 
   Future<void> playDesktopNotificationSound() async {
-    if (SettingsSvc.settings.desktopNotificationSoundPath.value != null) {
-      _desktopNotificationPlayer?.dispose();
-      final player = Player();
-      _desktopNotificationPlayer = player;
+    final path = SettingsSvc.settings.desktopNotificationSoundPath.value;
+    if (path == null) return;
+
+    _desktopNotificationPlayer?.dispose();
+    final player = Player();
+    _desktopNotificationPlayer = player;
+
+    // Subscribe before open(). `stream.completed` is a broadcast stream, so a completion
+    // fired while open() is still awaiting is dropped when nothing is listening yet — the
+    // dispose future would then never resolve. media_kit runs mpv with keep-open=yes, so an
+    // undisposed player holds its PipeWire/audio output open for the life of the process.
+    final completed = player.stream.completed.firstWhere((completed) => completed, orElse: () => false);
+    unawaited(completed.then((_) async {
+      await Future.delayed(const Duration(milliseconds: 450));
+      if (_desktopNotificationPlayer == player) {
+        await player.dispose();
+        _desktopNotificationPlayer = null;
+      }
+    }));
+
+    try {
       await player.setVolume(SettingsSvc.settings.desktopNotificationSoundVolume.value.toDouble());
-      await player.open(Media(SettingsSvc.settings.desktopNotificationSoundPath.value!));
-      player.stream.completed.firstWhere((completed) => completed, orElse: () => false).then((_) async {
-        await Future.delayed(const Duration(milliseconds: 450));
-        if (_desktopNotificationPlayer == player) {
-          await player.dispose();
-          _desktopNotificationPlayer = null;
-        }
-      });
+      await player.open(Media(path));
+    } catch (e, s) {
+      Logger.error('Failed to play desktop notification sound', error: e, trace: s, tag: 'NotificationsService');
+      if (_desktopNotificationPlayer == player) _desktopNotificationPlayer = null;
+      await player.dispose();
     }
   }
 
