@@ -157,7 +157,8 @@ class Database {
 
       Logger.info("Opening ObjectBox store from path: ${objectBoxDirectory.path}");
       store = await openStore(directory: objectBoxDirectory.path);
-    } catch (e) {
+    } catch (e, s) {
+      Logger.error("Failed to open ObjectBox store!", error: e, trace: s);
       if (e.toString().contains("another store is still open using the same path")) {
         Logger.debug("Retrying to attach to an existing ObjectBox store");
         store = Store.attach(getObjectBoxModel(), objectBoxDirectory.path);
