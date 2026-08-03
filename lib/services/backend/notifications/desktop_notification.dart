@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:bluebubbles/utils/logger/logger.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -241,6 +242,7 @@ class DesktopNotifications {
 
   /// Ids of notifications currently in Action Center (per the OS, not our callback map).
   static Future<List<int>> activeIds() async {
+    if (Platform.isLinux) return [];
     try {
       final List<ActiveNotification> active = await _plugin?.getActiveNotifications() ?? [];
       return active.map((n) => n.id).nonNulls.toList();
