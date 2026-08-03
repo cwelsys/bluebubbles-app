@@ -6,6 +6,7 @@ import 'package:bluebubbles/helpers/helpers.dart';
 // ignore: undefined_hidden_name
 import 'package:bluebubbles/database/models.dart' hide PlayerState;
 import 'package:bluebubbles/services/services.dart';
+import 'package:bluebubbles/utils/media_kit_audio_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -195,6 +196,7 @@ class _DesktopAudioPlayerState extends State<AudioPlayer>
             animController.reverse();
           }
         });
+      await MediaKitAudioGate.suspend(controller!);
       await controller!.setPlaylistMode(PlaylistMode.none);
       await controller!.open(Media(file.path!), play: false);
       if (attachment != null) cvController?.audioPlayersDesktop[attachment!.guid!] = controller!;
@@ -220,6 +222,7 @@ class _DesktopAudioPlayerState extends State<AudioPlayer>
                   await controller!.pause();
                 } else {
                   animController.forward();
+                  await MediaKitAudioGate.resumeIfAudible(controller);
                   await controller!.play();
                 }
               },

@@ -8,6 +8,7 @@ import 'package:bluebubbles/app/wrappers/theme_switcher.dart';
 import 'package:bluebubbles/helpers/helpers.dart';
 import 'package:bluebubbles/database/models.dart';
 import 'package:bluebubbles/services/services.dart';
+import 'package:bluebubbles/utils/media_kit_audio_gate.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -109,6 +110,7 @@ class PlayPauseButton extends StatelessWidget {
                     if (customOnTap != null) {
                       customOnTap?.call();
                     } else {
+                      await MediaKitAudioGate.resumeIfAudible(controller?.player);
                       await controller?.player.play();
                       Future.delayed(const Duration(milliseconds: 500), () {
                         showPlayPauseOverlay.value = false;
@@ -276,6 +278,7 @@ class _VideoPlayerState extends State<VideoPlayer> with AutomaticKeepAliveClient
   Future<void> _playInline() async {
     await initializeController();
     await videoController?.player.setVolume(muted.value ? 0.0 : 100.0);
+    await MediaKitAudioGate.resumeIfAudible(videoController?.player);
     await videoController?.player.play();
     showPlayPauseOverlay.value = false;
   }
@@ -312,6 +315,7 @@ class _VideoPlayerState extends State<VideoPlayer> with AutomaticKeepAliveClient
     }
 
     final player = Player();
+    await MediaKitAudioGate.suspend(player);
     videoController = VideoController(player);
     await videoController!.player.setPlaylistMode(PlaylistMode.none);
     await videoController!.player.open(media, play: false);
