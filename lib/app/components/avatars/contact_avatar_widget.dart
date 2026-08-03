@@ -247,7 +247,7 @@ class _ContactAvatarWidgetState extends State<ContactAvatarWidget> with ThemeHel
               // Reactive values already computed above in Obx scope.
               final contactV2Avatar = cachedAvatarPath;
 
-              if (!hideContactInfo && widget.handle == null && userAvatarPath != null) {
+              if (!hideContactInfo && widget.handle == null && contactV2 == null && userAvatarPath != null) {
                 dynamic file = File(userAvatarPath);
                 return CircleAvatar(
                   key: ValueKey(userAvatarPath),
