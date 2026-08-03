@@ -86,6 +86,7 @@ class MessagesViewState extends State<MessagesView> with MessagesServiceMixin, T
     smartRepliesManager = SmartRepliesManager();
     dropZoneManager = DropZoneManager(controller: controller);
     animationOrchestrator = MessageAnimationOrchestrator();
+    scrollController.addListener(_maybeLoadMore);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -237,6 +238,8 @@ class MessagesViewState extends State<MessagesView> with MessagesServiceMixin, T
       onlyDetach: widget.customService != null,
     );
 
+    scrollController.removeListener(_maybeLoadMore);
+
     // Controllers are now disposed by MessagesService.onClose()
     _setStateDebouncer?.cancel();
     _eventSubscription?.cancel();
@@ -337,6 +340,26 @@ class MessagesViewState extends State<MessagesView> with MessagesServiceMixin, T
         // Note: the RxList is already updated in the manager, just ensure UI knows
       }
     }
+  }
+
+  bool _paginationScheduled = false;
+
+  void _maybeLoadMore() {
+    if (!mounted || fetching || noMoreMessages) return;
+    if (!scrollController.hasClients || scrollController.positions.length != 1) return;
+    final position = scrollController.position;
+    final viewportUnfilled = position.maxScrollExtent <= 0;
+    final nearOldEnd = position.maxScrollExtent - position.pixels < 600;
+    if (viewportUnfilled || nearOldEnd) _loadMoreMessages();
+  }
+
+  void _schedulePaginationCheck() {
+    if (_paginationScheduled || fetching || noMoreMessages) return;
+    _paginationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _paginationScheduled = false;
+      _maybeLoadMore();
+    });
   }
 
   Future<void> _loadMoreMessages({int limit = 25}) async {
@@ -662,9 +685,7 @@ class MessagesViewState extends State<MessagesView> with MessagesServiceMixin, T
                                     // paginate
                                     if (index >= _messages.length) {
                                       if (!noMoreMessages && handlersInitialized && index == _messages.length) {
-                                        if (!fetching) {
-                                          _loadMoreMessages();
-                                        }
+                                        _schedulePaginationCheck();
                                         return const Loader();
                                       }
 
