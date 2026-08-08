@@ -8,6 +8,7 @@ import 'package:bluebubbles/env.dart';
 import 'package:bluebubbles/helpers/helpers.dart';
 import 'package:bluebubbles/services/backend/interfaces/chat_interface.dart';
 import 'package:bluebubbles/services/services.dart';
+import 'package:bluebubbles/utils/desktop_sound.dart';
 import 'package:bluebubbles/utils/logger/logger.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
@@ -878,12 +879,11 @@ class IncomingMessageHandler {
     if (Platform.isAndroid && !LifecycleSvc.isAlive) return;
 
     if (kIsDesktop) {
-      final player = Player();
-      player.stream.completed
-          .firstWhere((done) => done)
-          .then((_) => Future.delayed(const Duration(milliseconds: 500), player.dispose));
-      await player.setVolume(SettingsSvc.settings.soundVolume.value.toDouble());
-      await player.open(Media(SettingsSvc.settings.receiveSoundPath.value!));
+      await playDesktopSound(
+        SettingsSvc.settings.receiveSoundPath.value!,
+        volume: SettingsSvc.settings.soundVolume.value.toDouble(),
+        tag: 'IncomingMessageHandler',
+      );
     } else if (!kIsWeb) {
       final controller = PlayerController();
       await controller.preparePlayer(

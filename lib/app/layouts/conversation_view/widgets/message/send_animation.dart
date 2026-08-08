@@ -12,6 +12,7 @@ import 'package:bluebubbles/database/models.dart';
 import 'package:bluebubbles/app/state/message_state.dart';
 import 'package:bluebubbles/services/services.dart';
 import 'package:bluebubbles/services/ui/chat/send_data.dart';
+import 'package:bluebubbles/utils/desktop_sound.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:mime_type/mime_type.dart';
@@ -143,12 +144,11 @@ class _SendAnimationState extends CustomState<SendAnimation, SendData, Conversat
     if (SettingsSvc.settings.sendSoundPath.value != null &&
         !(isNullOrEmptyString(text) && isNullOrEmptyString(data.subject) && controller.pickedAttachments.isEmpty)) {
       if (kIsDesktop) {
-        Player player = Player();
-        await player.setVolume(SettingsSvc.settings.soundVolume.value.toDouble());
-        await player.open(Media(SettingsSvc.settings.sendSoundPath.value!));
-        player.stream.completed
-            .firstWhere((completed) => completed)
-            .then((_) async => Future.delayed(const Duration(milliseconds: 450), () async => await player.dispose()));
+        await playDesktopSound(
+          SettingsSvc.settings.sendSoundPath.value!,
+          volume: SettingsSvc.settings.soundVolume.value.toDouble(),
+          tag: 'SendAnimation',
+        );
       } else {
         PlayerController controller = PlayerController();
         controller

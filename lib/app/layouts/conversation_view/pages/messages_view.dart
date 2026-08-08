@@ -11,6 +11,7 @@ import 'package:bluebubbles/database/database.dart';
 import 'package:bluebubbles/database/models.dart';
 import 'package:bluebubbles/helpers/helpers.dart';
 import 'package:bluebubbles/services/services.dart';
+import 'package:bluebubbles/utils/desktop_sound.dart';
 import 'package:bluebubbles/utils/logger/logger.dart';
 import 'package:collection/collection.dart';
 import 'package:defer_pointer/defer_pointer.dart';
@@ -490,12 +491,11 @@ class MessagesViewState extends State<MessagesView> with MessagesServiceMixin, T
 
     if (insertIndex == 0 && !message.isFromMe! && SettingsSvc.settings.receiveSoundPath.value != null) {
       if (kIsDesktop && (ChatsSvc.getChatState(chat.guid)?.isActive.value ?? false)) {
-        Player player = Player();
-        player.stream.completed
-            .firstWhere((completed) => completed)
-            .then((_) async => Future.delayed(const Duration(milliseconds: 500), () async => await player.dispose()));
-        await player.setVolume(SettingsSvc.settings.soundVolume.value.toDouble());
-        await player.open(Media(SettingsSvc.settings.receiveSoundPath.value!));
+        await playDesktopSound(
+          SettingsSvc.settings.receiveSoundPath.value!,
+          volume: SettingsSvc.settings.soundVolume.value.toDouble(),
+          tag: 'MessagesView',
+        );
       } else if (ChatsSvc.isChatActive(chat.guid)) {
         PlayerController controller = PlayerController();
         await controller
