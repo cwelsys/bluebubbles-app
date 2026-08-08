@@ -255,6 +255,10 @@ class SocketService {
     bool stateChanged = _lastState != status;
     _lastState = status;
 
+    if (stateChanged && status != SocketState.connected) {
+      TypingIndicatorSvc.clearAllRemoteTyping();
+    }
+
     switch (status) {
       case SocketState.connected:
         if (stateChanged) {

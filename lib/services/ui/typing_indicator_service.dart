@@ -23,6 +23,12 @@ class TypingIndicatorService extends GetxController {
 
   void clearRemoteTyping(String chatGuid) => _remoteTyping.remove(chatGuid);
 
+  void clearAllRemoteTyping() {
+    for (final state in _remoteTyping.values) {
+      if (state.value) state.value = false;
+    }
+  }
+
   Future<void> startTyping(String chatGuid) async {
     _activeTypingChatGuid = chatGuid;
     await ChatInterface.startTyping(chatGuid: chatGuid);
