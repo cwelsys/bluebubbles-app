@@ -344,9 +344,16 @@ class MessagesViewState extends State<MessagesView> with MessagesServiceMixin, T
   }
 
   bool _paginationScheduled = false;
+  DateTime? _lastFetchFailure;
+  static const Duration _fetchRetryCooldown = Duration(seconds: 5);
+
+  bool get _inFetchCooldown {
+    final failedAt = _lastFetchFailure;
+    return failedAt != null && DateTime.now().difference(failedAt) < _fetchRetryCooldown;
+  }
 
   void _maybeLoadMore() {
-    if (!mounted || fetching || noMoreMessages) return;
+    if (!mounted || fetching || noMoreMessages || _inFetchCooldown) return;
     if (!scrollController.hasClients || scrollController.positions.length != 1) return;
     final position = scrollController.position;
     final viewportUnfilled = position.maxScrollExtent <= 0;
@@ -355,7 +362,7 @@ class MessagesViewState extends State<MessagesView> with MessagesServiceMixin, T
   }
 
   void _schedulePaginationCheck() {
-    if (_paginationScheduled || fetching || noMoreMessages) return;
+    if (_paginationScheduled || fetching || noMoreMessages || _inFetchCooldown) return;
     _paginationScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _paginationScheduled = false;
@@ -373,11 +380,17 @@ class MessagesViewState extends State<MessagesView> with MessagesServiceMixin, T
     Logger.debug("_loadMoreMessages: Starting - current messages: $previousLength");
 
     // Start loading the next chunk of messages using mixin method
-    noMoreMessages = !(await loadNextChunk(controller, _messages, limit: limit).catchError((e, stack) {
+    bool hasMore;
+    try {
+      hasMore = await loadNextChunk(controller, _messages, limit: limit);
+    } catch (e, stack) {
       Logger.error("Failed to fetch message chunk!", error: e, trace: stack);
+      _lastFetchFailure = DateTime.now();
       fetching = false;
-      return true;
-    }));
+      return;
+    }
+    _lastFetchFailure = null;
+    noMoreMessages = !hasMore;
 
     if (!mounted) return;
 

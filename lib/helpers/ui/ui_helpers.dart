@@ -533,23 +533,27 @@ IconData getAttachmentIcon(String mimeType) {
 
 void showSnackbar(String title, String message,
     {int animationMs = 250, int durationMs = 1500, Function(GetSnackBar)? onTap, TextButton? button}) {
-  Get.snackbar(
-    title,
-    message,
-    snackPosition: SnackPosition.BOTTOM,
-    colorText: Get.theme.colorScheme.onInverseSurface,
-    backgroundColor: Get.theme.colorScheme.inverseSurface,
-    margin: const EdgeInsets.only(bottom: 10),
-    maxWidth: Get.width - 20,
-    isDismissible: false,
-    duration: Duration(milliseconds: durationMs),
-    animationDuration: Duration(milliseconds: animationMs),
-    mainButton: button,
-    onTap: onTap ??
-        (GetSnackBar bar) {
-          if (Get.isSnackbarOpen) Get.back();
-        },
-  );
+  try {
+    Get.snackbar(
+      title,
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      colorText: Get.theme.colorScheme.onInverseSurface,
+      backgroundColor: Get.theme.colorScheme.inverseSurface,
+      margin: const EdgeInsets.only(bottom: 10),
+      maxWidth: Get.width - 20,
+      isDismissible: false,
+      duration: Duration(milliseconds: durationMs),
+      animationDuration: Duration(milliseconds: animationMs),
+      mainButton: button,
+      onTap: onTap ??
+          (GetSnackBar bar) {
+            if (Get.isSnackbarOpen) Get.back();
+          },
+    );
+  } catch (e) {
+    Logger.warn("Failed to show snackbar '$title': $e", tag: 'UIHelpers');
+  }
 }
 
 Future<void> showToast(String message, {bool isError = false}) async {
