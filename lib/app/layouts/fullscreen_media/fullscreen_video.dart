@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bluebubbles/utils/logger/logger.dart';
+import 'package:bluebubbles/utils/media_kit_audio_gate.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:bluebubbles/app/layouts/fullscreen_media/dialogs/metadata_dialog.dart';
 import 'package:bluebubbles/helpers/helpers.dart';
@@ -81,6 +82,7 @@ class _FullscreenVideoState extends State<FullscreenVideo> with AutomaticKeepAli
     } else {
       // Create new controller
       final player = Player();
+      await MediaKitAudioGate.suspend(player);
       videoController = VideoController(player);
 
       late final Media media;
@@ -105,8 +107,10 @@ class _FullscreenVideoState extends State<FullscreenVideo> with AutomaticKeepAli
       showPlayPauseOverlay.value = false;
       widget.onOverlayToggle?.call(false);
       // Auto-play after a short delay so the viewer is fully visible first
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (!hasDisposed) videoController.player.play();
+      Future.delayed(const Duration(milliseconds: 500), () async {
+        if (hasDisposed) return;
+        await MediaKitAudioGate.resumeIfAudible(videoController.player);
+        await videoController.player.play();
       });
     } else {
       showPlayPauseOverlay.value = true;
@@ -322,6 +326,7 @@ class _FullscreenVideoState extends State<FullscreenVideo> with AutomaticKeepAli
                                   await videoController.player.pause();
                                   showPlayPauseOverlay.value = true;
                                 } else {
+                                  await MediaKitAudioGate.resumeIfAudible(videoController.player);
                                   await videoController.player.play();
                                   showPlayPauseOverlay.value = false;
                                 }

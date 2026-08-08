@@ -4,6 +4,7 @@ import 'package:bluebubbles/database/models.dart';
 import 'package:bluebubbles/helpers/helpers.dart';
 import 'package:bluebubbles/services/network/http_service.dart';
 import 'package:bluebubbles/utils/logger/logger.dart';
+import 'package:bluebubbles/utils/media_kit_audio_gate.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -58,6 +59,7 @@ mixin LivePhotoMixin<T extends StatefulWidget> on State<T> {
       await livePhotoPlayer!.seek(Duration.zero);
 
       // Start playing (but keep hidden while loading)
+      await MediaKitAudioGate.resumeIfAudible(livePhotoPlayer);
       await livePhotoPlayer!.play();
 
       // Wait a bit for the video to buffer the first frame
@@ -104,11 +106,13 @@ mixin LivePhotoMixin<T extends StatefulWidget> on State<T> {
         );
 
         livePhotoPlayer = Player();
+        await MediaKitAudioGate.suspend(livePhotoPlayer);
         livePhotoController = VideoController(livePhotoPlayer!);
         await livePhotoPlayer!.setPlaylistMode(PlaylistMode.none);
         await livePhotoPlayer!.open(Media(livePhotoPath), play: false);
 
         // Start playing and wait for first frame to be ready
+        await MediaKitAudioGate.resumeIfAudible(livePhotoPlayer);
         await livePhotoPlayer!.play();
         await Future.delayed(const Duration(milliseconds: 100));
 
@@ -168,6 +172,7 @@ mixin LivePhotoMixin<T extends StatefulWidget> on State<T> {
 
       // Initialize video player
       livePhotoPlayer = Player();
+      await MediaKitAudioGate.suspend(livePhotoPlayer);
       livePhotoController = VideoController(livePhotoPlayer!);
       await livePhotoPlayer!.setPlaylistMode(PlaylistMode.none);
       await livePhotoPlayer!.open(Media(livePhotoPath), play: false);
@@ -175,6 +180,7 @@ mixin LivePhotoMixin<T extends StatefulWidget> on State<T> {
       isDownloadingLivePhoto.value = false;
 
       // Start playback and wait for first frame to be ready
+      await MediaKitAudioGate.resumeIfAudible(livePhotoPlayer);
       await livePhotoPlayer!.play();
       await Future.delayed(const Duration(milliseconds: 100));
 
