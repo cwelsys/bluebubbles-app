@@ -375,7 +375,7 @@ class PinnedIndicators extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final showTypingIndicator = cvc(controller.chat).showTypingIndicator.value;
+      final showTypingIndicator = TypingIndicatorSvc.remoteTyping(controller.chat.guid).value;
       if (showTypingIndicator) {
         return Positioned(
           top: -sqrt(width / 2) + width * 0.05,

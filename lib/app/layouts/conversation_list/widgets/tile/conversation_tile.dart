@@ -339,7 +339,7 @@ class ChatLeadingState extends State<ChatLeading> with ThemeHelpers {
       children: [
         if (widget.unreadIcon != null && iOS) widget.unreadIcon!,
         Obx(() {
-          final showTypingIndicator = cvc(widget.controller.chat).showTypingIndicator.value;
+          final showTypingIndicator = TypingIndicatorSvc.remoteTyping(widget.controller.chat.guid).value;
           double height = Theme.of(context).textTheme.labelLarge!.fontSize! * 1.25;
           return Stack(
             clipBehavior: Clip.none,

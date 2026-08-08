@@ -156,8 +156,7 @@ class ActionHandler extends GetxService {
       case "typing-indicator":
         final chat = ChatsSvc.findChatByGuid(data["guid"]);
         if (chat != null) {
-          final controller = cvc(chat);
-          controller.showTypingIndicator.value = data["display"];
+          TypingIndicatorSvc.setRemoteTyping(chat.guid, data["display"] == true);
         }
         return;
       case "incoming-facetime":

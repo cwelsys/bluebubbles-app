@@ -744,6 +744,7 @@ class ChatsService {
   void removeChat(Chat toRemove) {
     if (headless) return;
     chatStates.remove(toRemove.guid);
+    TypingIndicatorSvc.clearRemoteTyping(toRemove.guid);
     _sortedChats.removeWhere((c) => c.guid == toRemove.guid);
     _scheduleListVersionUpdate(immediate: true);
   }

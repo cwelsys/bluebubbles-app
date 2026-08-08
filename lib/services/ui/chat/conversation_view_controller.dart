@@ -46,7 +46,7 @@ class ConversationViewController extends StatefulController with GetSingleTicker
   final Map<String, List<EntityAnnotation>> mlKitParsedText = {};
 
   // message view items
-  final RxBool showTypingIndicator = false.obs;
+  RxBool get showTypingIndicator => TypingIndicatorSvc.remoteTyping(chat.guid);
   final RxBool showScrollDown = false.obs;
   final RxDouble timestampOffset = 0.0.obs;
   final RxBool inSelectMode = false.obs;
@@ -107,6 +107,7 @@ class ConversationViewController extends StatefulController with GetSingleTicker
   bool keyboardOpen = false;
   double _keyboardOffset = 0;
   Timer? _scrollDownDebounce;
+  StreamSubscription<bool>? _keyboardVisibilitySub;
   Future<void> Function(SendData)? sendFunc;
 
   /// When set, [_SendAnimationState] will auto-fire this send as soon as it
@@ -144,7 +145,7 @@ class ConversationViewController extends StatefulController with GetSingleTicker
     super.onInit();
 
     textController.mentionables = mentionables;
-    KeyboardVisibilityController().onChange.listen((bool visible) async {
+    _keyboardVisibilitySub = KeyboardVisibilityController().onChange.listen((bool visible) async {
       keyboardOpen = visible;
       if (scrollController.hasClients && scrollController.positions.length == 1) {
         _keyboardOffset = scrollController.offset;
@@ -201,6 +202,8 @@ class ConversationViewController extends StatefulController with GetSingleTicker
       a.player.pause();
       a.player.dispose();
     }
+    _scrollDownDebounce?.cancel();
+    _keyboardVisibilitySub?.cancel();
     scrollController.dispose();
     super.onClose();
   }

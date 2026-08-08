@@ -7,8 +7,21 @@ TypingIndicatorService get TypingIndicatorSvc => GetIt.I<TypingIndicatorService>
 
 class TypingIndicatorService extends GetxController {
   String? _activeTypingChatGuid;
+  final Map<String, RxBool> _remoteTyping = {};
 
   bool get isTyping => _activeTypingChatGuid != null;
+
+  /// Whether the other party is typing in [chatGuid]. Keyed by guid and owned by
+  /// this singleton so observers keep a stable [RxBool] across [ChatState] and
+  /// [ConversationViewController] rebuilds.
+  RxBool remoteTyping(String chatGuid) => _remoteTyping.putIfAbsent(chatGuid, () => false.obs);
+
+  void setRemoteTyping(String chatGuid, bool typing) {
+    final state = remoteTyping(chatGuid);
+    if (state.value != typing) state.value = typing;
+  }
+
+  void clearRemoteTyping(String chatGuid) => _remoteTyping.remove(chatGuid);
 
   Future<void> startTyping(String chatGuid) async {
     _activeTypingChatGuid = chatGuid;
