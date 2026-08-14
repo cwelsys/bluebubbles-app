@@ -4,6 +4,7 @@ import '../../pages/scheduling/scheduled_messages_panel.dart';
 import '../tiles/connection_server_tile.dart';
 import '../tiles/private_api_tile.dart';
 import '../tiles/redacted_mode_tile.dart';
+import 'package:bluebubbles/app/layouts/settings/dialogs/version_dialog.dart';
 import 'package:adaptive_theme/adaptive_theme.dart';
 import 'package:bluebubbles/app/components/avatars/contact_avatar_widget.dart';
 import 'package:bluebubbles/app/layouts/settings/pages/advanced/notification_providers_panel.dart';
@@ -62,6 +63,7 @@ List<Widget> buildSettingItemList({
         children: [
           SettingsTile(
             backgroundColor: tileColor,
+            activePage: ProfilePanel,
             title: SettingsSvc.settings.redactedMode.value && SettingsSvc.settings.hideContactInfo.value
                 ? "User Name"
                 : SettingsSvc.settings.userName.value,
@@ -76,6 +78,7 @@ List<Widget> buildSettingItemList({
               size: 50,
             ),
             trailing: const NextButton(),
+            minVerticalPadding: 20,
           ),
         ],
       ),
@@ -124,6 +127,7 @@ List<Widget> buildSettingItemList({
               child: SettingsTile(
                 backgroundColor: tileColor,
                 title: "Scheduled Messages",
+                activePage: ScheduledMessagesPanel,
                 onTap: () {
                   ns.pushAndRemoveSettingsUntil(
                     context,
@@ -148,6 +152,7 @@ List<Widget> buildSettingItemList({
               child: SettingsTile(
                 backgroundColor: tileColor,
                 title: "Message Reminders",
+                activePage: MessageRemindersPanel,
                 onTap: () {
                   ns.pushAndRemoveSettingsUntil(context, const MessageRemindersPanel(), (Route route) => route.isFirst);
                 },
@@ -191,6 +196,7 @@ List<Widget> buildSettingItemList({
           SettingsTile(
             backgroundColor: tileColor,
             title: "Appearance Settings",
+            activePage: ThemingPanel,
             onTap: () {
               ns.pushAndRemoveSettingsUntil(context, ThemingPanel(), (Route route) => route.isFirst);
             },
@@ -245,6 +251,7 @@ List<Widget> buildSettingItemList({
           child: SettingsTile(
             backgroundColor: tileColor,
             title: "Media Settings",
+            activePage: AttachmentPanel,
             onTap: () {
               ns.pushAndRemoveSettingsUntil(context, const AttachmentPanel(), (Route route) => route.isFirst);
             },
@@ -277,6 +284,7 @@ List<Widget> buildSettingItemList({
           child: SettingsTile(
             backgroundColor: tileColor,
             title: "Notification Settings",
+            activePage: NotificationPanel,
             onTap: () {
               ns.pushAndRemoveSettingsUntil(context, const NotificationPanel(), (Route route) => route.isFirst);
             },
@@ -293,7 +301,6 @@ List<Widget> buildSettingItemList({
         SearchableSettingItem(
           title: "Chat List Settings", // Title to search
           searchTags: [
-            "Show Connection Indicator",
             "Show Sync Indicator in Chat List",
             "Message Status Indicators",
             "Filtered Chat List",
@@ -318,6 +325,7 @@ List<Widget> buildSettingItemList({
           child: SettingsTile(
             backgroundColor: tileColor,
             title: "Chat List Settings",
+            activePage: ChatListPanel,
             onTap: () {
               ns.pushAndRemoveSettingsUntil(context, const ChatListPanel(), (Route route) => route.isFirst);
             },
@@ -360,6 +368,7 @@ List<Widget> buildSettingItemList({
           child: SettingsTile(
             backgroundColor: tileColor,
             title: "Conversation Settings",
+            activePage: ConversationPanel,
             onTap: () {
               ns.pushAndRemoveSettingsUntil(context, const ConversationPanel(), (Route route) => route.isFirst);
             },
@@ -382,6 +391,7 @@ List<Widget> buildSettingItemList({
           child: SettingsTile(
             backgroundColor: tileColor,
             title: "Custom Groups",
+            activePage: CustomGroupsPanel,
             onTap: () {
               ns.pushAndRemoveSettingsUntil(context, const CustomGroupsPanel(), (Route route) => route.isFirst);
             },
@@ -416,6 +426,7 @@ List<Widget> buildSettingItemList({
             child: SettingsTile(
               backgroundColor: tileColor,
               title: "Desktop Settings",
+              activePage: DesktopPanel,
               onTap: () {
                 ns.pushAndRemoveSettingsUntil(context, const DesktopPanel(), (Route route) => route.isFirst);
               },
@@ -453,6 +464,7 @@ List<Widget> buildSettingItemList({
           child: SettingsTile(
             backgroundColor: tileColor,
             title: "More Settings",
+            activePage: MiscPanel,
             onTap: () {
               ns.pushAndRemoveSettingsUntil(context, const MiscPanel(), (Route route) => route.isFirst);
             },
@@ -522,6 +534,7 @@ List<Widget> buildSettingItemList({
             child: SettingsTile(
               backgroundColor: tileColor,
               title: "Tasker Integration",
+              activePage: TaskerPanel,
               trailing: const NextButton(),
               onTap: () async {
                 ns.pushAndRemoveSettingsUntil(context, const TaskerPanel(), (Route route) => route.isFirst);
@@ -556,6 +569,7 @@ List<Widget> buildSettingItemList({
               containerColor: Colors.cyan,
             ),
             title: "Notification Providers",
+            activePage: NotificationProvidersPanel,
             trailing: const NextButton(),
           ),
         ),
@@ -585,6 +599,7 @@ List<Widget> buildSettingItemList({
                 containerColor: Colors.green,
               ),
               title: "Contacts Management",
+              activePage: ContactsManagementPanel,
               trailing: const NextButton(),
             ),
           ),
@@ -608,6 +623,7 @@ List<Widget> buildSettingItemList({
                 containerColor: Colors.red[700],
               ),
               title: "Storage Analyzer",
+              activePage: StorageAnalyzerPanel,
               trailing: const NextButton(),
             ),
           ),
@@ -640,6 +656,7 @@ List<Widget> buildSettingItemList({
               containerColor: Colors.lightBlue,
             ),
             title: "Developer Tools",
+            activePage: TroubleshootPanel,
             trailing: const NextButton(),
           ),
         ),
@@ -677,16 +694,17 @@ List<Widget> buildSettingItemList({
               containerColor: Colors.blueGrey,
             ),
             title: "Backup & Restore",
+            activePage: BackupRestorePanel,
           ),
         ),
 
         // About & Links Section
-        SearchableSettingItem(
+        const SearchableSettingItem(
           title: "Leave Us a Review", // Title to search
           child: SettingsTile(
             title: "Leave Us a Review",
             onTap: SettingsItemsActions.openStoreReview,
-            leading: const SettingsLeadingIcon(
+            leading: SettingsLeadingIcon(
               iosIcon: CupertinoIcons.star_fill,
               materialIcon: Icons.star,
               containerColor: Colors.blue,
@@ -731,7 +749,7 @@ List<Widget> buildSettingItemList({
             "Changelog",
             "Developers",
             "Keyboard Shortcuts",
-            "About",
+            "About"
           ],
           onTap: () {
             ns.pushAndRemoveSettingsUntil(context, const AboutPanel(), (Route route) => route.isFirst);
@@ -739,6 +757,7 @@ List<Widget> buildSettingItemList({
           child: SettingsTile(
             backgroundColor: tileColor,
             title: "About & More",
+            activePage: AboutPanel,
             onTap: () {
               ns.pushAndRemoveSettingsUntil(context, const AboutPanel(), (Route route) => route.isFirst);
             },
@@ -782,6 +801,22 @@ List<Widget> buildSettingItemList({
               title: kIsWeb ? "Logout" : "Reset App",
             ),
           ),
+      ],
+    ),
+    const SizedBox(height: 16.0),
+    SearchableSettingItem(
+      title: "App Version: $appVersion",
+      searchTags: ["Version"],
+      child: Container(),
+      onTap: () => showVersionDialog(context),
+    ),
+    SettingsSection(
+      backgroundColor: tileColor,
+      children: [
+        SettingsSubtitle(
+          subtitle: "App Version: $appVersion",
+          bottomPadding: false,
+        ),
       ],
     ),
   ];

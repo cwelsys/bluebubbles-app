@@ -163,7 +163,7 @@ class _AttachmentHolderState extends State<AttachmentHolder> with ThemeHelpers {
     if (isInReply || hideAttachments || widget.transparentBackground) return null;
     if (attachment.mimeStart != "image") return null;
     if (!attachment.hasValidSize) return null;
-    return attachment.displayBox(NavigationSvc.width(context) * 0.5);
+    return attachment.displayBox(NavigationSvc.width(context) * 0.5, context.height * 0.6);
   }
 
   EdgeInsetsGeometry _computePadding(
@@ -361,11 +361,11 @@ class _AttachmentHolderState extends State<AttachmentHolder> with ThemeHelpers {
         // ignore: unused_local_variable
         final _ = state.transferState.value;
         // ignore: unused_local_variable
-        final __ = state.resolvedFile.value;
+        final _ = state.resolvedFile.value;
         // ignore: unused_local_variable
-        final ___ = state.activeDownload.value;
+        final _ = state.activeDownload.value;
         // ignore: unused_local_variable
-        final ____ = state.hasError.value;
+        final _ = state.hasError.value;
 
         final hasError = state.hasError.value || message.error > 0;
         final hasPreview = state.resolvedFile.value != null ||

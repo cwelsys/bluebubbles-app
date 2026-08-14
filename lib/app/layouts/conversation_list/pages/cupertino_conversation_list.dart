@@ -16,7 +16,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_acrylic/flutter_acrylic.dart';
 import 'package:get/get.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
-import 'package:universal_io/io.dart';
 
 class CupertinoConversationList extends StatefulWidget {
   const CupertinoConversationList({super.key, required this.parentController});
@@ -112,9 +111,13 @@ class CupertinoConversationListState extends State<CupertinoConversationList> wi
                       int maxOnPage = rowCount * colCount;
                       PageController _controller = PageController();
                       int _pageCount = (pinCount / maxOnPage).ceil();
+                      bool singleRow = usedRowCount == 1;
 
                       return SliverPadding(
-                        padding: const EdgeInsets.only(top: 10),
+                        // Bottom padding guarantees visible separation from the regular chat list even if
+                        // totalHeight below slightly underestimates the tiles' real rendered height on a
+                        // given device (font metrics can vary enough to make the estimate come in short).
+                        padding: const EdgeInsets.only(top: 6, bottom: 2),
                         sliver: SliverToBoxAdapter(
                           child: LayoutBuilder(builder: (BuildContext context, BoxConstraints constraints) {
                             // Horizontal overhead per tile: margins (4+4) + padding (11+11) + extra gap
@@ -122,19 +125,21 @@ class CupertinoConversationListState extends State<CupertinoConversationList> wi
                             // Vertical overhead per tile: AnimatedContainer margins (top:1) + padding (4+2)
                             //   + ChatTitle fixed padding (top:6 + bottom:4)
                             const double tileVOverhead = 17.0;
+                            // Extra per-row safety margin so real-device font/DPI variance can't make the
+                            // estimate come in short and let the last row bleed into the space below it.
+                            const double tileVSafetyBuffer = 4.0;
                             // PageView horizontal padding (10 each side)
                             const double pageHPadding = 20.0;
 
                             // Derive a clean, capped avatar size from the actual available width
                             final double rawAvatarSize =
                                 (constraints.maxWidth - pageHPadding - colCount * tileHOverhead) / colCount;
-                            final double avatarSize =
-                                clampDouble(rawAvatarSize, 70.0, Platform.isAndroid ? 120.0 : 140.0);
+                            final double avatarSize = min(rawAvatarSize, 120.0);
                             final double tileWidth = avatarSize + tileHOverhead;
 
                             final TextStyle style = context.theme.textTheme.bodyMedium!;
                             final double textHeight = (style.height ?? 1.2) * (style.fontSize ?? 14);
-                            final double tileHeight = avatarSize + textHeight + tileVOverhead;
+                            final double tileHeight = avatarSize + textHeight + tileVOverhead + tileVSafetyBuffer;
                             final double totalHeight = usedRowCount * tileHeight;
 
                             // avatar only
@@ -189,14 +194,14 @@ class CupertinoConversationListState extends State<CupertinoConversationList> wi
                                       return Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 10),
                                         child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisAlignment: MainAxisAlignment.start,
                                           children: List.generate(usedRowCount, (rowIndex) {
                                             final int rowStart = rowIndex * colCount;
                                             final List<Chat> rowChats =
                                                 pageChats.skip(rowStart).take(colCount).toList();
-                                            final bool singleRow = usedRowCount == 1;
 
                                             return Row(
+                                              mainAxisSize: MainAxisSize.min,
                                               mainAxisAlignment:
                                                   singleRow ? MainAxisAlignment.center : MainAxisAlignment.start,
                                               children: [

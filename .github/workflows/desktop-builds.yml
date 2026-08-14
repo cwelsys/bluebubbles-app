@@ -50,11 +50,22 @@ jobs:
         run: echo "KLIPY_API_KEY=${{ secrets.KLIPY_API_KEY }}" > .env
         shell: bash
 
-      # Inno Setup 6 and Rust (for super_native_extensions) are preinstalled
-      # on the windows-latest runner image.
+      - name: Cache native build downloads
+        uses: ./.github/actions/cache-native-deps
+
+      # Inno Setup 6 is preinstalled on the windows-latest runner image.
       - name: Build app (phase 1)
         run: .\windows\build.ps1 -Phase Build
         shell: pwsh
+
+      # A plugin added since the last regeneration would ship unsigned. SignPath's
+      # artifact configurations are edited by hand in their UI, so fail here and
+      # paste the regenerated XML rather than trying to push it from CI.
+      - name: Check SignPath config covers every DLL
+        shell: pwsh
+        run: |
+          .\windows\signpath\generate.ps1 -ReleaseDir build\windows\x64\runner\Release
+          git diff --exit-code --ignore-cr-at-eol -- windows/signpath
 
       # sign=true when: token present AND (release tag or manual sign/release_signing).
       - name: Determine signing
@@ -282,6 +293,9 @@ jobs:
 
       - name: Write .env
         run: echo "KLIPY_API_KEY=${{ secrets.KLIPY_API_KEY }}" > .env
+
+      - name: Cache native build downloads
+        uses: ./.github/actions/cache-native-deps
 
       - name: Build
         run: bash linux/build.sh

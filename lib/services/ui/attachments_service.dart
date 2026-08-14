@@ -17,6 +17,7 @@ import 'package:image_size_getter/file_input.dart';
 import 'package:image_size_getter/image_size_getter.dart' as isg;
 import 'package:path/path.dart';
 import 'package:bluebubbles/models/models.dart' show AttachmentUploadProgress;
+import 'package:bluebubbles/utils/file_utils.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:saver_gallery/saver_gallery.dart';
 import 'package:universal_html/html.dart' as html;
@@ -247,18 +248,30 @@ class AttachmentsService extends GetxService {
         ..setAttribute("download", file.name)
         ..click();
     } else if (kIsDesktop) {
-      String? savePath = await FilePicker.saveFile(
-        initialDirectory: await FilesystemSvc.downloadsDirectory,
-        dialogTitle: 'Choose a location to save this file',
-        fileName: file.name,
-        lockParentWindow: true,
-        type: file.extension != null ? FileType.custom : FileType.any,
-        allowedExtensions: file.extension != null ? [file.extension!] : null,
-      );
+      if (file.path == null && file.bytes == null) {
+        return showSnackbar('Error', 'That attachment has no data to save!');
+      }
 
-      if (savePath == null) {
+      final String? picked;
+      try {
+        picked = await saveFileAs(
+          fileName: file.name,
+          initialDirectory: await FilesystemSvc.downloadsDirectory,
+          sourcePath: file.path,
+          bytes: file.path == null ? file.bytes : null,
+          allowedExtensions: file.extension != null ? [file.extension!] : null,
+        );
+      } catch (ex, stack) {
+        Logger.error('Failed to save attachment!', error: ex, trace: stack);
+        return showSnackbar('Error', 'Failed to save attachment!');
+      }
+
+      if (picked == null) {
         return showSnackbar('Error', 'You didn\'t select a file path!');
       }
+      // Non-nullable copy: the null check above doesn't promote inside the
+      // snackbar's callback.
+      final String savePath = picked;
 
       showSnackbar(
         'Success',
@@ -436,8 +449,8 @@ class AttachmentsService extends GetxService {
     return File(cachedPath).existsSync() ? cachedPath : null;
   }
 
-  /// The filter chain behind every video thumbnail. Shared by the ffmpeg-kit path and the Linux
-  /// shell-out below so the two can't drift apart.
+  /// The filter chain behind every video thumbnail. Shared by the ffmpeg-kit path and the arm64
+  /// Linux shell-out below so the two can't drift apart.
   ///
   /// Rotation is left to ffmpeg's default `-autorotate`, which handles iPhone .mov rotation flags
   /// correctly on its own.
@@ -449,6 +462,8 @@ class AttachmentsService extends GetxService {
   /// `scale=512:512:force_original_aspect_ratio=decrease`: the actual box-fit.
   static const _thumbnailFilter =
       'thumbnail,scale=iw*sar:ih,setsar=1,scale=512:512:force_original_aspect_ratio=decrease';
+
+  static final _useSystemFfmpeg = Platform.isLinux && Platform.version.contains('linux_arm64');
 
   /// Generates (or reuses) a video thumbnail and returns the path to it on disk -- never loads
   /// the decoded thumbnail into memory as bytes, so callers must render it via [Image.file].
@@ -476,8 +491,25 @@ class AttachmentsService extends GetxService {
     bool success;
 
     try {
-      if (Platform.isLinux) {
-        success = await _generateThumbnailWithSystemFfmpeg(filePath, destPath);
+      if (_useSystemFfmpeg) {
+        // Process.run bypasses the shell and resolves `ffmpeg` on PATH, so the args go in as a
+        // list and the paths need no quoting or escaping.
+        final result = await Process.run('ffmpeg', [
+          '-y',
+          '-i', filePath,
+          '-vf', _thumbnailFilter,
+          '-frames:v', '1',
+          '-q:v', '2',
+          // Forces the output muxer -- the cached dest path has no image extension for ffmpeg to
+          // infer a format from.
+          '-f', 'mjpeg',
+          destPath,
+        ]);
+        success = result.exitCode == 0;
+        if (!success) {
+          Logger.warn('ffmpeg thumbnail failed for $filePath (rc=${result.exitCode}) stderr=${result.stderr}',
+              tag: 'VideoThumbnail');
+        }
       } else {
         final command = '-y '
             '-i "${_ffmpegEscapePath(filePath)}" '
@@ -509,71 +541,6 @@ class AttachmentsService extends GetxService {
 
   /// Escapes a path for safe interpolation inside a double-quoted ffmpeg command argument.
   String _ffmpegEscapePath(String path) => path.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
-
-  /// Runs the thumbnail command against a real ffmpeg binary instead of ffmpeg-kit.
-  ///
-  /// ffmpeg-kit ships no Linux native bundle for anything but x86_64, and its CMake hard-fails on
-  /// other architectures, so an arm64 build can't even configure. Shelling out is both smaller and
-  /// arch-portable: the snap stages ffmpeg and the flatpak manifest builds it, so the packages
-  /// carry a binary that works on every architecture they publish.
-  ///
-  /// [Process.run] bypasses the shell, so arguments are passed as a list and the paths need no
-  /// quoting or escaping.
-  Future<bool> _generateThumbnailWithSystemFfmpeg(String source, String dest) async {
-    final ffmpeg = await _resolveLinuxFfmpeg();
-    if (ffmpeg == null) {
-      Logger.warn('no ffmpeg binary found on PATH -- install ffmpeg to enable video thumbnails',
-          tag: 'VideoThumbnail');
-      return false;
-    }
-
-    final result = await Process.run(ffmpeg, [
-      '-y',
-      '-i', source,
-      // Forces the output muxer -- the cached dest path has no image extension for ffmpeg to
-      // infer a format from.
-      '-vf', _thumbnailFilter,
-      '-frames:v', '1',
-      '-q:v', '2',
-      '-f', 'mjpeg',
-      dest,
-    ]);
-
-    if (result.exitCode != 0) {
-      Logger.warn('ffmpeg thumbnail failed for $source (rc=${result.exitCode}) stderr=${result.stderr}',
-          tag: 'VideoThumbnail');
-      return false;
-    }
-    return true;
-  }
-
-  /// Memoized lookup of the ffmpeg binary to shell out to on Linux. Resolved once per run --
-  /// the answer can't change while the app is open.
-  Future<String?>? _linuxFfmpegPath;
-
-  Future<String?> _resolveLinuxFfmpeg() {
-    return _linuxFfmpegPath ??= () async {
-      // A copy shipped next to the runner wins, so the release tarball can be made
-      // self-contained without depending on what the user's distro has installed.
-      final bundled = join(dirname(Platform.resolvedExecutable), 'ffmpeg');
-      if (await File(bundled).exists()) return bundled;
-
-      // Otherwise take it from PATH: the snap stages ffmpeg into $SNAP/usr/bin and the flatpak
-      // builds it into /app/bin -- neither sandbox can see the host's copy, so each ships its
-      // own, and both directories are already on PATH. A plain tarball install falls through to
-      // the distro package.
-      try {
-        final which = await Process.run('which', ['ffmpeg']);
-        if (which.exitCode == 0) {
-          final path = (which.stdout as String).trim();
-          if (path.isNotEmpty) return path;
-        }
-      } catch (ex) {
-        Logger.debug('ffmpeg PATH lookup failed ($ex)', tag: 'VideoThumbnail');
-      }
-      return null;
-    }();
-  }
 
   /// Thumbnails were historically generated at 128px, which looks blurry now that video previews
   /// render at message-bubble size — treat those disk caches as stale so they get regenerated.
@@ -980,7 +947,7 @@ class AttachmentsService extends GetxService {
     }
 
     try {
-      await File(tempPath).rename(previewPath);
+      await moveFile(File(tempPath), previewPath);
     } catch (ex, stack) {
       Logger.error('Failed to move image preview into place!', error: ex, trace: stack);
       return null;

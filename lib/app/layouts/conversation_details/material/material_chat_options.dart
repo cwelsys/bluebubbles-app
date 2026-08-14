@@ -8,7 +8,8 @@ import 'package:bluebubbles/app/layouts/settings/pages/storage/storage_analyzer_
 import 'package:bluebubbles/app/layouts/settings/pages/theming/theme_studio/theme_studio_panel.dart';
 import 'package:bluebubbles/helpers/helpers.dart';
 import 'package:bluebubbles/app/layouts/settings/pages/theming/avatar/avatar_crop.dart';
-import 'package:bluebubbles/app/layouts/settings/pages/theming/background/background_crop.dart';
+import 'package:bluebubbles/app/layouts/conversation_details/pages/wallpaper_picker/wallpaper_picker_page.dart';
+import 'package:bluebubbles/app/wrappers/theme_switcher.dart';
 import 'package:bluebubbles/database/models.dart';
 import 'package:bluebubbles/services/services.dart';
 import 'package:flutter/foundation.dart';
@@ -105,7 +106,9 @@ class ExpressiveChatOptions extends StatelessWidget {
                     isDefault: true,
                     onPressed: () async {
                       Navigator.of(context, rootNavigator: true).pop();
-                      final result = await Get.to<String?>(() => AvatarCrop(chat: chat));
+                      final result = await Navigator.of(context).push<String?>(
+                        ThemeSwitcher.buildPageRoute(builder: (context) => AvatarCrop(chat: chat)),
+                      );
                       if (result != null) {
                         await ChatsSvc.setChatCustomAvatarPath(chat, result);
                       }
@@ -114,7 +117,9 @@ class ExpressiveChatOptions extends StatelessWidget {
                 ],
               );
             } else {
-              final result = await Get.to<String?>(() => AvatarCrop(chat: chat));
+              final result = await Navigator.of(context).push<String?>(
+                ThemeSwitcher.buildPageRoute(builder: (context) => AvatarCrop(chat: chat)),
+              );
               if (result == null) return;
               await ChatsSvc.setChatCustomAvatarPath(chat, result);
             }
@@ -125,45 +130,9 @@ class ExpressiveChatOptions extends StatelessWidget {
         enabled: !kIsWeb,
         build: (context) => M3EListTile(
           icon: Icons.wallpaper,
-          title: "Custom background",
-          supportingText: "Set or reset this chat's background",
-          onTap: () {
-            final backgroundPath = FilesystemSvc.getExistingChatBackgroundPath(chat.guid);
-            if (backgroundPath != null) {
-              showBBDialog(
-                context: context,
-                title: "Custom Background",
-                body: "You already have a custom background for this chat. What would you like to do?",
-                actions: [
-                  BBDialogAction(
-                    text: "Cancel",
-                    onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
-                  ),
-                  BBDialogAction(
-                    text: "Remove",
-                    isDestructive: true,
-                    color: context.theme.colorScheme.error,
-                    onPressed: () async {
-                      final File bgFile = File(backgroundPath);
-                      if (await bgFile.exists()) bgFile.delete();
-                      await ChatsSvc.setChatCustomBackgroundPath(chat, null);
-                      if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
-                    },
-                  ),
-                  BBDialogAction(
-                    text: "Set New",
-                    isDefault: true,
-                    onPressed: () {
-                      Navigator.of(context, rootNavigator: true).pop();
-                      Get.to(() => BackgroundCrop(chat: chat));
-                    },
-                  ),
-                ],
-              );
-            } else {
-              Get.to(() => BackgroundCrop(chat: chat));
-            }
-          },
+          title: "Wallpaper",
+          supportingText: "Set an image or animated wallpaper",
+          onTap: () => NavigationSvc.push(context, WallpaperPickerPage(chat: chat)),
         ),
       ),
       _OptionRow(
@@ -176,8 +145,9 @@ class ExpressiveChatOptions extends StatelessWidget {
             final lightThemeName = chat.customThemeLight ?? ThemeStruct.getLightTheme().name;
             final darkThemeName = chat.customThemeDark ?? ThemeStruct.getDarkTheme().name;
 
-            Get.to(
-              () => ThemeStudioPanel(
+            NavigationSvc.push(
+              context,
+              ThemeStudioPanel(
                 config: ThemeStudioPanelConfig(
                   initialLightThemeName: lightThemeName,
                   initialDarkThemeName: darkThemeName,

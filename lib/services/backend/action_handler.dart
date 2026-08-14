@@ -156,7 +156,15 @@ class ActionHandler extends GetxService {
       case "typing-indicator":
         final chat = ChatsSvc.findChatByGuid(data["guid"]);
         if (chat != null) {
-          TypingIndicatorSvc.setRemoteTyping(chat.guid, data["display"] == true);
+          final typing = data["display"] == true;
+          final controller = Get.isRegistered<ConversationViewController>(tag: chat.guid)
+              ? Get.find<ConversationViewController>(tag: chat.guid)
+              : null;
+          if (controller != null) {
+            controller.messageListGate.run(() => TypingIndicatorSvc.setRemoteTyping(chat.guid, typing));
+          } else {
+            TypingIndicatorSvc.setRemoteTyping(chat.guid, typing);
+          }
         }
         return;
       case "incoming-facetime":

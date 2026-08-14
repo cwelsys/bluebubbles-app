@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:bluebubbles/utils/logger/logger.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_local_notifications_windows/src/details/notification_to_xml.dart';
+import 'package:universal_io/io.dart';
 
 class _Callbacks {
   const _Callbacks({this.onOpen, this.onAction, this.onReply});
@@ -133,10 +134,14 @@ class DesktopNotifications {
 
   /// Cancels every notification in [group]'s id range that the OS still lists
   /// as active — including toasts dismissed to Action Center and ones shown by
-  /// a previous run of the app.
+  /// a previous run of the app, plus the ones this session posted.
+  ///
+  /// The second half is what keeps this working on Linux, where [activeIds] is
+  /// always empty: toasts from an earlier run are unreachable there, but a chat
+  /// read while the app is up still clears.
   static Future<void> cancelGroup(String group) async {
     final int base = groupBase(group);
-    for (final int id in await activeIds()) {
+    for (final int id in {...await activeIds(), ..._callbacks.keys}) {
       if (id >= base && id < base + groupRange) await cancel(id);
     }
   }
@@ -242,7 +247,7 @@ class DesktopNotifications {
 
   /// Ids of notifications currently in Action Center (per the OS, not our callback map).
   static Future<List<int>> activeIds() async {
-    if (Platform.isLinux) return [];
+    if (Platform.isLinux) return []; // No implementation in plugin
     try {
       final List<ActiveNotification> active = await _plugin?.getActiveNotifications() ?? [];
       return active.map((n) => n.id).nonNulls.toList();
@@ -299,6 +304,7 @@ class DesktopNotifications {
     FutureOr<void> Function(String text)? onReply,
   }) {
     final List<String> labels = actionLabels.take(_maxWindowsButtons - (replyInput ? 1 : 0)).toList();
+    final Uri? avatarUri = _windowsFileUri(avatarPath);
     return _post(
       group: group,
       replaceId: replaceId,
@@ -319,9 +325,9 @@ class DesktopNotifications {
       windows: (id) => WindowsNotificationDetails(
         duration: WindowsNotificationDuration.short,
         images: [
-          if (avatarPath != null)
+          if (avatarUri != null)
             WindowsImage(
-              Uri.file(avatarPath, windows: true),
+              avatarUri,
               altText: 'avatar',
               placement: WindowsImagePlacement.appLogoOverride,
               crop: WindowsImageCrop.circle,
@@ -369,6 +375,7 @@ class DesktopNotifications {
     FutureOr<void> Function()? onDecline,
   }) {
     final bool answerable = onAnswer != null || onDecline != null;
+    final Uri? avatarUri = _windowsFileUri(avatarPath);
     return _post(
       title: caller,
       body: body,
@@ -379,8 +386,8 @@ class DesktopNotifications {
       windows: (id) => WindowsNotificationDetails(
         scenario: WindowsNotificationScenario.incomingCall,
         images: [
-          if (avatarPath != null)
-            WindowsImage(Uri.file(avatarPath, windows: true), altText: 'caller avatar', crop: WindowsImageCrop.circle),
+          if (avatarUri != null)
+            WindowsImage(avatarUri, altText: 'caller avatar', crop: WindowsImageCrop.circle),
         ],
         actions: [
           if (answerable) ...[
@@ -407,6 +414,24 @@ class DesktopNotifications {
   }
 
   // ---------------- Shared plumbing ----------------
+
+  /// File URI for a toast image, or null when [path] can't be one.
+  ///
+  /// `Uri.file` throws on a path segment holding a Windows-reserved character
+  /// (`" * / : < > ? \ |`) — and such paths do reach us, because Windows accepts
+  /// a `:` on write as an NTFS alternate data stream separator. Left unguarded
+  /// that ArgumentError takes down the entire toast: the user silently stops
+  /// getting notifications from whoever owns the bad avatar. A toast without a
+  /// picture is a far better failure.
+  static Uri? _windowsFileUri(String? path) {
+    if (path == null) return null;
+    try {
+      return Uri.file(path, windows: true);
+    } catch (e) {
+      Logger.warn('Dropping notification image, unusable path: $path ($e)', tag: 'DesktopNotifications');
+      return null;
+    }
+  }
 
   static Future<int?> _post({
     String? group,

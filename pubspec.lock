@@ -736,7 +736,7 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: linux-arm64-noop
+      ref: bef0c248842d156153d041c810a53641fdb553c4
       resolved-ref: bef0c248842d156153d041c810a53641fdb553c4
       url: "https://github.com/BlueBubblesApp/ffmpeg_kit_flutter.git"
     source: git
@@ -823,13 +823,14 @@ packages:
     source: hosted
     version: "1.2.0"
   flat_buffers:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: flat_buffers
-      sha256: "7c1de2d6eb5f3e61e5c50040841109f509deaaf2b12ec0d57b92456d9ea50345"
-      url: "https://pub.dev"
-    source: hosted
-    version: "25.9.23"
+      path: dart
+      ref: e7c6874192a643c50b10cb90f81c0ed84fd7f53a
+      resolved-ref: e7c6874192a643c50b10cb90f81c0ed84fd7f53a
+      url: "https://github.com/google/flatbuffers.git"
+    source: git
+    version: "25.12.19"
   flex_color_picker:
     dependency: "direct main"
     description:
@@ -854,6 +855,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.1"
+  floating_animation:
+    dependency: "direct main"
+    description:
+      name: floating_animation
+      sha256: "090747c3aba98133b61a7cbb804fb6e2c157331a8df9a3898396921ca2dcca25"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.0"
   flutter:
     dependency: "direct main"
     description: flutter
@@ -871,10 +880,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_contacts
-      sha256: be8e6de65fa7ae4332c812bcd4e8b90c0d74093fbda972ce3ca2f9f34f65e93c
+      sha256: "3a018a04ffc88f8555068f86b7750c7cbc758e9ebccafa985f91353bcb6df496"
       url: "https://pub.dev"
     source: hosted
-    version: "2.0.2"
+    version: "2.3.1"
   flutter_displaymode:
     dependency: "direct main"
     description:
@@ -1077,6 +1086,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.7"
+  flutter_moving_background:
+    dependency: "direct main"
+    description:
+      name: flutter_moving_background
+      sha256: bcb6a5360a579e8415000622b2dd4215db8c8a8ebe26e616648cf2769e05366c
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.4.0"
   flutter_native_splash:
     dependency: "direct main"
     description:
@@ -1288,14 +1305,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.3"
-  globbing:
-    dependency: transitive
-    description:
-      name: globbing
-      sha256: "4f89cfaf6fa74c9c1740a96259da06bd45411ede56744e28017cc534a12b6e2d"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.0"
   google_fonts:
     dependency: "direct main"
     description:
@@ -2124,10 +2133,10 @@ packages:
     dependency: "direct main"
     description:
       name: particles_flutter
-      sha256: "74057830f0526902cc36325b5feefbbeda88b5f8f9958cf8f24ec98eeeab36c2"
+      sha256: "9d592a19327bb4e1a8e865e45e42ef71c3788f6dd3ac95bd93b34a6ef1e0e98e"
       url: "https://pub.dev"
     source: hosted
-    version: "2.0.2"
+    version: "3.2.0"
   passkit:
     dependency: "direct main"
     description:
@@ -2982,14 +2991,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.4.0+1"
-  system_info2:
-    dependency: "direct main"
-    description:
-      name: system_info2
-      sha256: b937736ecfa63c45b10dde1ceb6bb30e5c0c340e14c441df024150679d65ac43
-      url: "https://pub.dev"
-    source: hosted
-    version: "4.1.0"
   term_glyph:
     dependency: transitive
     description:
@@ -3326,6 +3327,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.2.1"
+  wave:
+    dependency: "direct main"
+    description:
+      name: wave
+      sha256: "3a22d3122de63888e70c88920bdf686e360e5ec3e3bdb037d4da228d68d3556e"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.5"
   web:
     dependency: transitive
     description:
@@ -3441,4 +3450,4 @@ packages:
     version: "3.1.3"
 sdks:
   dart: ">=3.12.2 <4.0.0"
-  flutter: ">=3.41.0"
+  flutter: ">=3.44.0"

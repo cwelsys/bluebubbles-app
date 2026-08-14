@@ -17,6 +17,7 @@ import 'package:bluebubbles/app/wrappers/tablet_mode_wrapper.dart';
 import 'package:bluebubbles/database/models.dart';
 import 'package:bluebubbles/services/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' hide context;
 import 'package:permission_handler/permission_handler.dart';
@@ -241,7 +242,7 @@ class _ConversationListState extends CustomState<ConversationList, void, Convers
                 NavigationSvc.maxWidthLeft = constraints.maxWidth;
                 return PopScope(
                   canPop: false,
-                  onPopInvokedWithResult: <T>(bool _, T? __) async {
+                  onPopInvokedWithResult: <T>(bool _, T? _) async {
                     Get.until((route) {
                       bool id2result = false;
                       // check if we should pop the left side first
@@ -274,7 +275,7 @@ class _ConversationListState extends CustomState<ConversationList, void, Convers
                       return false;
                     },
                     pages: [
-                      CupertinoPage(
+                      MaterialPage(
                         name: "initial",
                         child: child,
                       )
@@ -287,7 +288,7 @@ class _ConversationListState extends CustomState<ConversationList, void, Convers
             NavigationSvc.maxWidthRight = constraints.maxWidth;
             return PopScope(
               canPop: false,
-              onPopInvokedWithResult: <T>(bool _, T? __) async {
+              onPopInvokedWithResult: <T>(bool _, T? _) async {
                 Get.back(id: 2);
               },
               child: Navigator(
@@ -296,7 +297,7 @@ class _ConversationListState extends CustomState<ConversationList, void, Convers
                   return false;
                 },
                 pages: [
-                  const CupertinoPage(
+                  const MaterialPage(
                     name: "initial",
                     child: InitialWidgetRight(),
                   ),

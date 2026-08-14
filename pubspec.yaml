@@ -12,7 +12,7 @@ description: Send iMessages on Android using BlueBubbles!
 # Read more about iOS versioning at
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 
-version: 2.1.0+89
+version: 2.1.1+91
 publish_to: none
 
 environment:
@@ -63,8 +63,10 @@ dependencies:
   exif: ^3.3.0
   faker: ^2.2.0
   ffmpeg_kit_flutter_new_min: ^3.6.2
-  flutter_contacts: ^2.0.2  # mobile only
+  # Must be >=2.3.0: https://github.com/QuisApp/flutter_contacts/issues/240
+  flutter_contacts: ^2.3.1  # mobile only.
   file_picker: ^11.0.2
+  floating_animation: ^1.1.0
   firebase_dart:
     git:
       url: https://github.com/appsup-dart/firebase_dart.git
@@ -82,6 +84,7 @@ dependencies:
   flutter_local_notifications: ^22.0.1
   flutter_map_marker_popup: ^8.1.0
   flutter_markdown_plus: ^1.0.7
+  flutter_moving_background: ^0.4.0
   flutter_slidable: ^4.0.1
   flutter_sliding_up_panel: ^2.1.1
   flutter_staggered_grid_view: ^0.7.0
@@ -133,7 +136,7 @@ dependencies:
   on_exit: ^1.0.0
   open_filex: ^4.7.0
   package_info_plus: ^9.0.1
-  particles_flutter: ^2.0.2
+  particles_flutter: ^3.2.0
   pasteboard: ^0.5.0
   path_provider: ^2.1.5 # no web support
   path_provider_linux: ^2.2.1 # desktop shared_preferences store path resolution
@@ -167,7 +170,6 @@ dependencies:
   store_checker: ^1.8.0
   synchronized: ^3.3.0+3
   supercharged: ^2.1.1
-  system_info2: ^4.0.0
   tray_manager: ^0.5.1 # linux tray goes through xdg_status_notifier_item instead, see lib/utils/linux_tray.dart
   dbus: ^0.7.11 # linux tray
   xdg_status_notifier_item: # linux tray icon left-click, which tray_manager's appindicator backend can't do
@@ -182,6 +184,7 @@ dependencies:
   vcf_dart: ^1.0.2
   version: ^3.0.2
   video_player: ^2.10.0
+  wave: ^0.2.5
   win32: ^5.10.1
   window_manager: ^0.5.1
   windows_taskbar: ^1.1.2
@@ -202,6 +205,11 @@ dependencies:
   uuid: any
 dependency_overrides:
   clock: ^1.1.2 # encrypter_plus
+  flat_buffers: # RangeError on FlexBuffer resize: https://github.com/objectbox/objectbox-dart/issues/786
+    git:
+      url: https://github.com/google/flatbuffers.git
+      ref: e7c6874192a643c50b10cb90f81c0ed84fd7f53a
+      path: dart
   flutter_local_notifications_windows: # no identity + crashing fixes + suppressPopup
     git:
       url: https://github.com/jjoelj/flutter_local_notifications.git
@@ -231,7 +239,7 @@ dependency_overrides:
   ffmpeg_kit_flutter_new_min:
     git:
       url: https://github.com/BlueBubblesApp/ffmpeg_kit_flutter.git
-      ref: linux-arm64-noop
+      ref: bef0c248842d156153d041c810a53641fdb553c4
 
 dev_dependencies:
   build_runner: ^2.7.1
@@ -345,7 +353,7 @@ msix_config:
   display_name: BlueBubbles
   publisher_display_name: BlueBubbles
   identity_name: 23344BlueBubbles.BlueBubbles
-  msix_version: 2.0.2.0
+  msix_version: 2.1.1.0
   publisher: CN=BEC9154D-191E-4375-BF30-698BD4C141C4
   vs_generated_images_folder_path: windows/icons
   logo_path: assets/icon/icon.ico
