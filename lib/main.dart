@@ -304,25 +304,9 @@ class DesktopWindowListener extends WindowListener {
     if (await windowManager.isPreventClose()) {
       await windowManager.hide();
     } else if (Platform.isLinux) {
-      quitLinuxDesktopApp();
+      exit(0);
     }
   }
-}
-
-/// Quit the desktop process immediately.
-///
-/// On Linux (especially Wayland), `window_manager.close()` does not reliably
-/// fire [DesktopWindowListener.onWindowClose] once the window is already
-/// hidden by close-to-tray. `setPreventClose(false)` can also race so
-/// [onWindowClose] still sees prevent-close and calls `hide()` again. The
-/// title-bar path already hard-exits on Linux; tray "Close App" must do the
-/// same or the process stays alive until SIGKILL.
-void quitLinuxDesktopApp() {
-  if (!Platform.isLinux) return;
-  try {
-    Logger.info("Exiting desktop process", tag: "Desktop");
-  } catch (_) {}
-  exit(0);
 }
 
 class Main extends StatelessWidget {
@@ -637,9 +621,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver, TrayListener {
         await windowManager.hide();
         break;
       case 'close_app':
-        if (Platform.isLinux) {
-          quitLinuxDesktopApp();
-        }
+        if (Platform.isLinux) exit(0);
         await windowManager.setPreventClose(false);
         await windowManager.close();
         break;
