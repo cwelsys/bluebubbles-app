@@ -59,6 +59,7 @@ class NotificationsService {
   static int? aliasesToast;
   static String? aliasesToastText;
   static Map<String, int> facetimeNotifications = {};
+  static final Map<String, Timer> facetimeRingTimers = {};
   static Map<String, int> activeToasts = {};
   static Map<String, Timer> debounceTimers = {};
   static Map<String, List<PendingToastItem>> pendingMessages = {};
@@ -334,21 +335,20 @@ class NotificationsService {
       }
     }
 
-    final int? existing = facetimeNotifications.remove(key);
-    if (existing != null) {
-      await DesktopNotifications.cancel(existing);
-    }
+    await clearDesktopFaceTimeNotif(key);
 
     final int? id = await DesktopNotifications.showFaceTime(
       caller: caller,
       avatarPath: path,
       body: "Incoming FaceTime ${isAudio ? 'Audio' : 'Video'} Call",
       onOpen: () async {
+        await clearDesktopFaceTimeNotif(key);
         await showAndFocusWindow();
       },
       onAnswer: callUuid == null
           ? null
           : () async {
+              await clearDesktopFaceTimeNotif(key);
               await showAndFocusWindow();
               await IntentsSvc.answerFaceTime(callUuid);
             },
@@ -360,10 +360,17 @@ class NotificationsService {
             },
     );
 
-    if (id != null) facetimeNotifications[key] = id;
+    if (id != null) {
+      facetimeNotifications[key] = id;
+      // A `critical` toast is never expired by the shell, and the legacy
+      // `incoming-facetime` event has no call UUID for a status change to clear it by.
+      facetimeRingTimers[key] =
+          Timer(DesktopNotifications.facetimeRingWindow, () => clearDesktopFaceTimeNotif(key));
+    }
   }
 
   Future<void> clearDesktopFaceTimeNotif(String callerUuid) async {
+    facetimeRingTimers.remove(callerUuid)?.cancel();
     final int? id = facetimeNotifications.remove(callerUuid);
     if (id != null) await DesktopNotifications.cancel(id);
   }

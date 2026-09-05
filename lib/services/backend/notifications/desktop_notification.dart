@@ -363,9 +363,14 @@ class DesktopNotifications {
     );
   }
 
-  /// Incoming-call toast: stays on screen ringing until acted on, large circular caller
-  /// photo, and green Answer / red Decline buttons (Windows). Buttons only appear when
-  /// [onAnswer]/[onDecline] are provided.
+  /// How long an incoming-call toast rings before it gives up and clears itself.
+  /// A `critical` Linux notification is never expired by the shell, so the caller
+  /// is responsible for tearing the toast down after this window.
+  static const Duration facetimeRingWindow = Duration(seconds: 45);
+
+  /// Incoming-call toast: rings for [facetimeRingWindow] or until acted on, large
+  /// circular caller photo, and green Answer / red Decline buttons (Windows). Buttons
+  /// only appear when [onAnswer]/[onDecline] are provided.
   static Future<int?> showFaceTime({
     required String caller,
     String? avatarPath,
@@ -407,8 +412,7 @@ class DesktopNotifications {
         ],
         sound: ThemeLinuxSound('phone-incoming-call'),
         urgency: LinuxNotificationUrgency.critical,
-        resident: true,
-        timeout: const LinuxNotificationTimeout.expiresNever(),
+        timeout: LinuxNotificationTimeout.fromDuration(facetimeRingWindow),
       ),
     );
   }
