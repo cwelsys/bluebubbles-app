@@ -147,6 +147,9 @@ static void my_application_activate(GApplication* application) {
   }
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+  if (started_minimized(self->dart_entrypoint_arguments)) {
+    gtk_widget_hide(GTK_WIDGET(window));
+  }
 
   // Channel the Flutter side uses to drive the native splash (see
   // splash_screen.cc and pushStatus in lib/main.dart).
