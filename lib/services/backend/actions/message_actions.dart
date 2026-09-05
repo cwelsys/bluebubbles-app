@@ -168,22 +168,35 @@ class MessageActions {
         }
       }
 
-      // Save the participant & set the handle ID to the new participant
-      // Only do handleId lookup if we don't already have a handleRelation
-      if (inputMessage.handle == null && !inputMessage.handleRelation.hasValue && inputMessage.handleId != null) {
-        final handleQuery = handleBox.query(Handle_.originalROWID.equals(inputMessage.handleId!)).build();
-        handleQuery.limit = 1;
-        final foundHandle = handleQuery.findFirst();
-        handleQuery.close();
-        inputMessage.handle = foundHandle;
+      // `handle` is @Transient, so a message saved without a handleRelation has no
+      // persisted sender. Match on address+service first — the payload's handleId is
+      // the server's ROWID and does not always match a local Handle.originalROWID.
+      if (!inputMessage.handleRelation.hasValue) {
+        Handle? foundHandle;
 
-        // Set up handleRelation for the ToOne relationship
-        if (foundHandle != null && foundHandle.id != null) {
+        final payloadHandle = inputMessage.handle;
+        if (payloadHandle != null && payloadHandle.address.isNotEmpty) {
+          final addressQuery = handleBox
+              .query(Handle_.address.equals(payloadHandle.address) & Handle_.service.equals(payloadHandle.service))
+              .build();
+          addressQuery.limit = 1;
+          foundHandle = addressQuery.findFirst();
+          addressQuery.close();
+        }
+
+        if (foundHandle == null && (inputMessage.handleId ?? 0) != 0) {
+          final rowIdQuery = handleBox.query(Handle_.originalROWID.equals(inputMessage.handleId!)).build();
+          rowIdQuery.limit = 1;
+          foundHandle = rowIdQuery.findFirst();
+          rowIdQuery.close();
+        }
+
+        if (foundHandle != null) {
+          inputMessage.handle = foundHandle;
           inputMessage.handleRelation.target = foundHandle;
         }
-      } else if (inputMessage.handleRelation.hasValue && inputMessage.handle == null) {
-        // Use existing relationship to populate handle field
-        inputMessage.handle = inputMessage.handleRelation.target;
+      } else {
+        inputMessage.handle ??= inputMessage.handleRelation.target;
       }
 
       // Save associated messages or the original message (depending on whether

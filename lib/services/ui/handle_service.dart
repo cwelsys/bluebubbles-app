@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:bluebubbles/app/state/handle_state.dart';
 import 'package:bluebubbles/database/models.dart';
+import 'package:bluebubbles/models/models.dart' show HandleLookupKey;
 import 'package:bluebubbles/services/services.dart';
 import 'package:bluebubbles/utils/logger/logger.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 
 // ignore: non_constant_identifier_names
@@ -33,6 +35,10 @@ class HandleService {
   /// Registry: handle ID → HandleState
   final Map<int, HandleState> _handleStates = {};
 
+  /// "address/service" → local handle ID, so [getOrCreateHandleState] only pays
+  /// for the box lookup once per handle.
+  final Map<String, int> _idByAddress = {};
+
   StreamSubscription? _redactedModeListener;
   StreamSubscription? _hideContactInfoListener;
   StreamSubscription? _generateFakeAvatarsListener;
@@ -49,13 +55,34 @@ class HandleService {
 
   /// Returns an existing [HandleState] for [handle] or creates and caches a
   /// new one. Safe to call during [ChatState] and [MessageState] construction.
+  ///
+  /// [handle] is re-read from the box before it is snapshotted. A [Handle] built
+  /// by [Handle.fromMap] carries the *server's* ROWID in [Handle.id] and an
+  /// unattached `contactsV2` backlink, which ObjectBox reports as empty rather
+  /// than throwing — so the name silently degrades to the phone number and stays
+  /// that way for the session. Address+service is the only key correct for both
+  /// origins; the resolved local id is memoised so this costs one query per
+  /// handle rather than one per call.
   HandleState getOrCreateHandleState(Handle handle) {
-    final id = handle.id;
-    if (id == null) {
-      // Transient/unsaved handle — return an ephemeral state (not cached)
-      return HandleState(handle);
+    if (kIsWeb || handle.address.isEmpty) {
+      final id = handle.id;
+      if (id == null) return HandleState(handle);
+      return _handleStates.putIfAbsent(id, () => HandleState(handle));
     }
-    return _handleStates.putIfAbsent(id, () => HandleState(handle));
+
+    final key = '${handle.address}/${handle.service}';
+    final memoised = _idByAddress[key];
+    if (memoised != null) {
+      final cached = _handleStates[memoised];
+      if (cached != null) return cached;
+    }
+
+    final stored = Handle.findOne(addressAndService: HandleLookupKey(handle.address, handle.service));
+    final id = stored?.id ?? handle.id;
+    if (id == null) return HandleState(handle);
+
+    _idByAddress[key] = id;
+    return _handleStates.putIfAbsent(id, () => HandleState(stored ?? handle));
   }
 
   /// Returns the cached [HandleState] for [handleId], or null if it has not
@@ -133,6 +160,7 @@ class HandleService {
   /// service at app shutdown.
   void reset() {
     _handleStates.clear();
+    _idByAddress.clear();
   }
 
   void close() {
@@ -141,5 +169,6 @@ class HandleService {
     _generateFakeAvatarsListener?.cancel();
     _hideNamesForReactionsListener?.cancel();
     _handleStates.clear();
+    _idByAddress.clear();
   }
 }
