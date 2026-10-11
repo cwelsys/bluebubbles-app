@@ -140,7 +140,7 @@ mixin LivePhotoMixin<T extends StatefulWidget> on State<T> {
         });
       } catch (ex) {
         Logger.error("Failed to play existing live photo", error: ex);
-        showSnackbar("Error", "Failed to play live photo");
+        showSnackbar("Error", "Failed to play live photo", type: SnackbarType.error);
       }
       return;
     }
@@ -211,7 +211,7 @@ mixin LivePhotoMixin<T extends StatefulWidget> on State<T> {
       if (mounted) {
         isDownloadingLivePhoto.value = false;
       }
-      showSnackbar("Error", "Failed to load live photo");
+      showSnackbar("Error", "Failed to load live photo", type: SnackbarType.error);
     }
   }
 

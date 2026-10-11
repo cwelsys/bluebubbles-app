@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:bluebubbles/database/database.dart';
 import 'package:bluebubbles/database/models.dart';
+import 'package:bluebubbles/helpers/ui/async_task.dart';
 import 'package:bluebubbles/helpers/ui/ui_helpers.dart';
 import 'package:bluebubbles/services/backend/interfaces/contact_v2_interface.dart';
 import 'package:bluebubbles/services/backend/interfaces/sync_interface.dart';
@@ -24,6 +26,7 @@ class SyncService {
   final RxBool isIncrementalSyncing = false.obs;
 
   static const Duration _incrementalSyncCooldown = Duration(seconds: 30);
+  static const int _dispatchChunkSize = 50;
   DateTime? _lastIncrementalSyncTimestamp;
 
   FullSyncManager? _manager;
@@ -67,31 +70,24 @@ class SyncService {
     _lastIncrementalSyncTimestamp = now;
     isIncrementalSyncing.value = true;
     int errors = 0;
+    bool chatSyncFailed = false;
 
     // Per-page tracking: record message IDs and chat subtitle message IDs that were
     // already applied by per-page events so the final return can skip redundant work.
     final processedMessageIds = <int>{};
     final processedSubtitleByChat = <String, int>{}; // chatGuid → message DB ID
 
+    // This runs on the UI thread (isolate event listeners are invoked synchronously),
+    // so a page of up to `batchSize` messages must never be hydrated in one block.
     Future<void> onPageComplete(dynamic data) async {
       if (data is! Map<String, dynamic>) return;
-      final messageIds = (data['messageIds'] as List).cast<int>();
+      final messageIdsByChat =
+          (data['messageIdsByChat'] as Map).map((k, v) => MapEntry(k as String, (v as List).cast<int>()));
       final latestPerChat = Map<String, int>.from(data['latestMessageIdPerChat'] as Map);
 
-      // Hydrate the page's messages and dispatch to any open chat view immediately.
-      final messages = Database.messages.getMany(messageIds).whereType<Message>().toList();
-      for (final message in messages) {
-        if (message.id != null) processedMessageIds.add(message.id!);
-        final chatGuid = message.chat.target?.guid;
-        if (chatGuid == null || message.guid == null) continue;
-        if (Get.isRegistered<MessagesService>(tag: chatGuid)) {
-          unawaited(Get.find<MessagesService>(tag: chatGuid).addNewMessage(message));
-        }
-      }
-
-      // Update chat subtitles for the per-page latest message per chat.
+      // repositionImmediate: false so a page touching many chats rebuilds the list once.
       for (final entry in latestPerChat.entries) {
-        final msg = Database.messages.get(entry.value);
+        final msg = await runAsync(() => Database.messages.get(entry.value));
         if (msg == null) continue;
         // If this chat was created for the first time during this sync,
         // ChatState doesn't exist yet — register it so updateChatLatestMessage
@@ -100,8 +96,26 @@ class SyncService {
           final chat = msg.chat.target;
           if (chat != null) await ChatsSvc.addChat(chat, immediate: true);
         }
-        ChatsSvc.updateChatLatestMessage(entry.key, msg);
+        ChatsSvc.updateChatLatestMessage(entry.key, msg, repositionImmediate: false);
         processedSubtitleByChat[entry.key] = entry.value;
+      }
+
+      // Only an open conversation view needs the individual messages — every other
+      // chat is served by the subtitle update above.
+      for (final entry in messageIdsByChat.entries) {
+        if (maybeFindMessagesSvc(entry.key) == null) continue;
+        for (int i = 0; i < entry.value.length; i += _dispatchChunkSize) {
+          // Re-resolve every chunk: the user can leave this chat between chunks
+          final service = maybeFindMessagesSvc(entry.key);
+          if (service == null) break;
+          final chunk = entry.value.sublist(i, math.min(i + _dispatchChunkSize, entry.value.length));
+          final messages = await runAsync(() => Database.messages.getMany(chunk).whereType<Message>().toList());
+          for (final message in messages) {
+            if (message.guid == null) continue;
+            await service.addNewMessage(message);
+            if (message.id != null) processedMessageIds.add(message.id!);
+          }
+        }
       }
     }
 
@@ -134,7 +148,7 @@ class SyncService {
         for (final entry in latestPerChat.entries) {
           final message = entry.value;
           if (message.id != null && processedSubtitleByChat[entry.key] == message.id) continue;
-          ChatsSvc.updateChatLatestMessage(entry.key, message);
+          ChatsSvc.updateChatLatestMessage(entry.key, message, repositionImmediate: false);
         }
 
         // Dispatch newly synced messages to any currently active chat view.
@@ -160,8 +174,18 @@ class SyncService {
     } catch (e, stack) {
       Logger.error('Incremental chat sync failed!', error: e, trace: stack, tag: 'Incremental Chat Sync');
       errors += 1;
+      chatSyncFailed = true;
     } finally {
       syncIsolate.removeEventListener(IsolateEvent.incrementalSyncPageComplete, onPageComplete);
+    }
+
+    // A failed chat sync must not consume the cooldown window. Otherwise a sync that
+    // fails on launch (e.g. no network yet) blocks the retry triggered by the socket
+    // reconnect or app resume that follows, and new messages wait out the cooldown.
+    // Only the chat sync resets it: contact sync failures are usually persistent
+    // (permissions, unsupported server) and shouldn't defeat the throttle.
+    if (chatSyncFailed) {
+      _lastIncrementalSyncTimestamp = null;
     }
 
     final contactSyncResult = await performContactSyncToHandles();
@@ -175,7 +199,7 @@ class SyncService {
     }
 
     if (errors > 0) {
-      await showToast('Incremental sync completed with $errors errors', isError: true);
+      await showToast("Sync failed. Check your connection.", isError: true);
     } else if (SettingsSvc.settings.showIncrementalSync.value) {
       await showToast('Incremental sync complete');
     }

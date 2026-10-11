@@ -72,7 +72,7 @@ class ConversationListController extends StatefulController {
     if (!camera) {
       bool granted = (await Permission.camera.request()) == PermissionStatus.granted;
       if (!granted) {
-        showSnackbar("Error", "Camera was denied");
+        showSnackbar("Error", "Camera was denied", type: SnackbarType.error);
         return;
       }
     }
@@ -195,8 +195,12 @@ class _ConversationListState extends CustomState<ConversationList, void, Convers
       if (state == null) continue;
       final customPath = state.customAvatarPath.value;
       if (customPath != null) {
-        // Group custom avatars render unresized (CircleAvatar + FileImage).
-        unawaited(precacheImage(FileImage(File(customPath)), context));
+        // Same ResizeImage params as ContactAvatarGroupWidget, or the warmed
+        // entry is never hit and the photo decodes a second time at full size.
+        unawaited(precacheImage(
+          ResizeImage(FileImage(File(customPath)), width: decodeSize, height: decodeSize),
+          context,
+        ));
         continue;
       }
       for (final hs in state.participants) {

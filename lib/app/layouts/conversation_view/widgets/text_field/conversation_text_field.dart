@@ -83,11 +83,11 @@ class ConversationTextFieldState extends CustomState<ConversationTextField, void
       });
     }
 
-    controller.focusNode.addListener(() => focusListener(false));
-    controller.subjectFocusNode.addListener(() => focusListener(true));
+    controller.focusNode.addListener(_onFocusChange);
+    controller.subjectFocusNode.addListener(_onSubjectFocusChange);
 
-    controller.textController.addListener(() => textListener(false));
-    controller.subjectTextController.addListener(() => textListener(true));
+    controller.textController.addListener(_onTextChange);
+    controller.subjectTextController.addListener(_onSubjectTextChange);
 
     if (kIsDesktop || kIsWeb) {
       proxyController.addListener(() {
@@ -150,6 +150,14 @@ class ConversationTextFieldState extends CustomState<ConversationTextField, void
       }
     }
   }
+
+  // Named methods rather than inline closures so dispose() can remove them: tear-offs of the same method on the
+  // same object compare ==, which is how removeListener matches. The focus nodes and text controllers belong to
+  // the ConversationViewController, which can outlive this widget and hand them to the next one.
+  void _onFocusChange() => focusListener(false);
+  void _onSubjectFocusChange() => focusListener(true);
+  void _onTextChange() => textListener(false);
+  void _onSubjectTextChange() => textListener(true);
 
   void focusListener(bool subject) async {
     final _focusNode = subject ? controller.subjectFocusNode : controller.focusNode;
@@ -319,10 +327,11 @@ class ConversationTextFieldState extends CustomState<ConversationTextField, void
     unawaited(ChatsSvc.setChatTextFieldText(chat, draftText));
     unawaited(ChatsSvc.setChatTextFieldAttachments(chat, draftAttachments));
 
-    controller.focusNode.dispose();
-    controller.subjectFocusNode.dispose();
-    controller.textController.dispose();
-    controller.subjectTextController.dispose();
+    controller.focusNode.removeListener(_onFocusChange);
+    controller.subjectFocusNode.removeListener(_onSubjectFocusChange);
+    controller.textController.removeListener(_onTextChange);
+    controller.subjectTextController.removeListener(_onSubjectTextChange);
+    proxyController.dispose();
     recorderController?.dispose();
     _emojiScrollController.dispose();
     controller.showAttachmentPicker.value = false;
@@ -339,9 +348,11 @@ class ConversationTextFieldState extends CustomState<ConversationTextField, void
     final text = controller.textController.text;
     if (controller.scheduledDate.value != null) {
       final date = controller.scheduledDate.value!;
-      if (date.isBefore(DateTime.now())) return showSnackbar("Error", "Pick a date in the future!");
+      if (date.isBefore(DateTime.now())) {
+        return showSnackbar("Error", "Pick a date in the future!", type: SnackbarType.error);
+      }
       if (text.contains(MentionTextEditingController.escapingChar)) {
-        return showSnackbar("Error", "Mentions are not allowed in scheduled messages!");
+        return showSnackbar("Error", "Mentions are not allowed in scheduled messages!", type: SnackbarType.error);
       }
       showDialog(
         context: context,
@@ -371,16 +382,18 @@ class ConversationTextFieldState extends CustomState<ConversationTextField, void
       } else {
         Logger.error("Scheduled message error: ${response.statusCode}");
         Logger.error(response.data);
-        showSnackbar("Error", "Something went wrong!");
+        showSnackbar("Error", "Something went wrong!", type: SnackbarType.error);
       }
     } else {
       if (text.isEmpty &&
           controller.subjectTextController.text.isEmpty &&
           !SettingsSvc.settings.privateAPIAttachmentSend.value) {
         if (controller.replyToMessage != null) {
-          return showSnackbar("Error", "Turn on Private API Attachment Send to send replies with media!");
+          return showSnackbar("Error", "Turn on Private API Attachment Send to send replies with media!",
+              type: SnackbarType.error);
         } else if (effect != null) {
-          return showSnackbar("Error", "Turn on Private API Attachment Send to send effects with media!");
+          return showSnackbar("Error", "Turn on Private API Attachment Send to send effects with media!",
+              type: SnackbarType.error);
         }
       }
       if (effect == null && SettingsSvc.settings.enablePrivateAPI.value) {
@@ -428,14 +441,14 @@ class ConversationTextFieldState extends CustomState<ConversationTextField, void
   Future<void> openFullCamera({String type = 'camera'}) async {
     bool granted = (await Permission.camera.request()).isGranted;
     if (!granted) {
-      showSnackbar("Error", "Camera access was denied!");
+      showSnackbar("Error", "Camera access was denied!", type: SnackbarType.error);
       return;
     }
 
     if (type == 'video') {
       final micGranted = (await Permission.microphone.request()).isGranted;
       if (!micGranted) {
-        showSnackbar("Error", "Microphone access was denied!");
+        showSnackbar("Error", "Microphone access was denied!", type: SnackbarType.error);
         return;
       }
     }

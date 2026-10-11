@@ -4,6 +4,11 @@
 - `contact_avatar_widget.dart` — single contact avatar (initials, photo, gradient color, typing indicator)
 - `contact_avatar_group_widget.dart` — stacked multi-contact avatar for group chats
 
+Every avatar file decodes at `ContactAvatarWidget.avatarDecodeSize` (256 px), group photos included — never draw one
+with a bare `FileImage`, and keep the conversation list warm-up's `ResizeImage` params identical or its precache is
+never hit. Chat backgrounds go through `wallpaper/static_wallpaper_image.dart` for the same reason: decoded at window
+size, one provider shape for draw and precache, and left in the cache on close so reopening is instant.
+
 Always use these for any handle/contact avatar — don't build custom avatar UIs from scratch.
 Color gradient from address: `toColorGradient(handle?.address)`. Custom color: `HexColor(handle!.color!)`.
 
@@ -18,6 +23,7 @@ Color gradient from address: `toColorGradient(handle?.address)`. Custom color: `
 - `bb_switch.dart` — `BBSwitch`, skin-aware toggle (`CupertinoSwitch` on iOS skin, Material `Switch` otherwise). Used internally by `SettingsSwitch`; prefer it over raw `Switch`/`CupertinoSwitch` for any new toggle.
 - `bb_slider.dart` — `BBSlider`, skin-aware slider (`CupertinoSlider` on iOS skin, Material 3 Expressive-styled `Slider` via `m3e/m3e_slider.dart` on Material/Samsung). Supports `divisions` (steps). Used internally by `SettingsSlider`; prefer it over raw `Slider`/`CupertinoSlider` for any new slider/number-picker.
 - `circle_progress_bar.dart` — circular progress indicator
+- `copy_address_button.dart` — `CopyAddressButton`, skin-aware copy icon for a handle address (check mark + "Copied" feedback). Used on participant tiles and the 1:1 details header
 - `custom_text_editing_controllers.dart` — `TextEditingController` subclasses for mention detection and rich formatting in the message composer
 - `sliver_decoration.dart` — decorative header for `CustomScrollView` / `SliverAppBar`
 

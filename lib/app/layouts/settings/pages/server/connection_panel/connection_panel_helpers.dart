@@ -118,9 +118,7 @@ mixin ConnectionPanelHelpersMixin {
       containerColor: Colors.teal,
       onTap: (context, controller) {
         Clipboard.setData(ClipboardData(text: HttpSvc.origin));
-        if (!Platform.isAndroid || (FilesystemSvc.androidInfo?.version.sdkInt ?? 0) < 33) {
-          showSnackbar("Copied", "Server address copied to clipboard!");
-        }
+        showCopiedToast("Server address copied to clipboard");
       },
     ),
     const InfoItemConfig(
@@ -170,6 +168,7 @@ mixin ConnectionPanelHelpersMixin {
         if (checked == true) return 'Connected';
         return 'Connecting';
       case 'socket':
+        if (SocketSvc.authFailed.value) return 'Incorrect password';
         return SocketSvc.state.value.name.capitalizeFirst ?? SocketSvc.state.value.name;
       case 'privateApi':
         final enabled = controller.serverDetails.value.privateApiEnabled;
@@ -561,7 +560,7 @@ mixin ConnectionPanelHelpersMixin {
                               isDefault: true,
                               onPressed: () async {
                                 if (portController.text.isEmpty || !portController.text.isNumericOnly) {
-                                  showSnackbar("Error", "Enter a valid port!");
+                                  showSnackbar("Error", "Enter a valid port!", type: SnackbarType.error);
                                   return;
                                 }
                                 Navigator.of(context, rootNavigator: true).pop();
@@ -576,6 +575,7 @@ mixin ConnectionPanelHelpersMixin {
                       await SettingsSvc.settings.saveOneAsync('useLocalhost');
                       if (SettingsSvc.settings.localhostPort.value == null) {
                         NetworkTasks.setOriginOverride(null);
+                        SocketSvc.followOrigin();
                       } else {
                         NetworkTasks.detectLocalhost(createSnackbar: true);
                       }
@@ -641,7 +641,7 @@ mixin ConnectionPanelHelpersMixin {
                         final downloadsPath = await FilesystemSvc.downloadsDirectory;
                         await File(join(downloadsPath, "main.log")).writeAsString(response.data['data']);
                         controller.fetchStatus.value = null;
-                        return showSnackbar('Success', 'Saved logs to $downloadsPath!');
+                        return showSnackbar('Success', 'Saved logs to $downloadsPath!', type: SnackbarType.success);
                       }
                       if (kIsWeb) {
                         final bytes = utf8.encode(response.data['data']);
@@ -786,7 +786,8 @@ mixin ConnectionPanelHelpersMixin {
                           );
                         } catch (e, s) {
                           Logger.error("Failed to update Firebase Database!", error: e, trace: s);
-                          showSnackbar("Error", "Something went wrong when updating Firebase Database!");
+                          showSnackbar("Error", "Something went wrong when updating Firebase Database!",
+                              type: SnackbarType.error);
                         }
                       } else {
                         if (!isNullOrEmpty(SettingsSvc.fcmData.firebaseURL)) {
