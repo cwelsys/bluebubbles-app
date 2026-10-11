@@ -644,15 +644,15 @@ class ContactV2Actions {
     return await Database.runInTransaction(TxMode.read, () {
       final contactsBox = Database.contactsV2;
 
-      // Normalize the search address
-      final normalized =
-          address.contains('@') ? ContactV2.normalizeEmail(address) : ContactV2.normalizePhoneNumber(address);
+      // Phone numbers match with or without the country code, like the handle linking in the contact sync
+      final candidates =
+          address.contains('@') ? {ContactV2.normalizeEmail(address)} : _getPhoneNumberVariants(address);
 
       // Search through all contacts for a match
       final allContacts = contactsBox.getAll();
 
       for (final contact in allContacts) {
-        if (contact.hasMatchingAddress(normalized)) {
+        if (candidates.any(contact.hasMatchingAddress)) {
           return contact.id;
         }
       }
