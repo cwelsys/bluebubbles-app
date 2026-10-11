@@ -308,10 +308,12 @@ class NotificationsService {
   }
 
   Future<void> createIncomingFaceTimeNotification(
-      String? callUuid, String caller, Uint8List? chatIcon, bool isAudio) async {
+      String? callUuid, String caller, Uint8List? chatIcon, bool? isAudio) async {
     // Set some notification defaults
     String title = caller;
-    String text = "${callUuid == null ? "Incoming" : "Answer"} FaceTime ${isAudio ? 'Audio' : 'Video'} Call";
+    String text = isAudio == null
+        ? "Incoming Call"
+        : "${callUuid == null ? "Incoming" : "Answer"} FaceTime ${isAudio ? 'Audio' : 'Video'} Call";
     chatIcon ??= (await rootBundle.load("assets/images/person64.png")).buffer.asUint8List();
 
     if (kIsWeb && Notification.permission == "granted") {
@@ -355,7 +357,7 @@ class NotificationsService {
     String? callUuid,
     String caller,
     Uint8List? avatar,
-    bool isAudio,
+    bool? isAudio,
   ) async {
     final String key = callUuid ?? caller;
     String? path;
@@ -375,7 +377,7 @@ class NotificationsService {
     final int? id = await DesktopNotifications.showFaceTime(
       caller: caller,
       avatarPath: path,
-      body: "Incoming FaceTime ${isAudio ? 'Audio' : 'Video'} Call",
+      body: isAudio == null ? "Incoming Call" : "Incoming FaceTime ${isAudio ? 'Audio' : 'Video'} Call",
       onOpen: () async {
         await clearDesktopFaceTimeNotif(key);
         await showAndFocusWindow();

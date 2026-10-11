@@ -41,7 +41,7 @@ class ActionHandler extends GetxService {
   Future<void> handleIncomingFaceTimeCall(Map<String, dynamic> data) async {
     Logger.info("Handling incoming FaceTime call");
     final callUuid = data["uuid"];
-    String? address = data["handle"]?["address"];
+    String? address = data["handle"]?["address"] ?? data["address"];
     String caller = data["address"] ?? "Unknown Number";
     bool isAudio = data["is_audio"];
     Uint8List? chatIcon;
@@ -76,7 +76,7 @@ class ActionHandler extends GetxService {
         chatIcon = await ContactsSvcV2.getContactAvatar(contact!.nativeContactId);
       }
       caller = contact?.displayName ?? caller;
-      await NotificationsSvc.createIncomingFaceTimeNotification(null, caller!, chatIcon, false);
+      await NotificationsSvc.createIncomingFaceTimeNotification(null, caller!, chatIcon, null);
     }
   }
 
