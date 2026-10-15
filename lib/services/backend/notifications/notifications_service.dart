@@ -579,7 +579,7 @@ class NotificationsService {
   }
 
   Future<void> _openChat(Chat chat) async {
-    if (!ChatsSvc.isChatActive(chat.guid) && Get.context != null) {
+    if (ChatsSvc.activeChat?.chat.guid != chat.guid && Get.context != null) {
       NavigationSvc.pushAndRemoveUntil(Get.context!, ConversationView(chat: chat), (route) => route.isFirst);
     }
   }
