@@ -137,7 +137,7 @@ class _DesktopPanelState extends State<DesktopPanel> with ThemeHelpers {
                             containerColor: Colors.orange,
                           ),
                           subtitle:
-                              "Select the titlebar style. Native uses system window decorations and looks best on GNOME. Custom is necessary on non-GNOME systems and required for 'Minimize to Tray' to work correctly. Hidden removes all titlebar elements.",
+                              "Select the titlebar style. Native uses system window decorations and looks best on GNOME. Custom draws a single close button over the app. Hidden removes all titlebar elements.",
                         );
                       } else {
                         return const SizedBox.shrink();
@@ -157,7 +157,7 @@ class _DesktopPanelState extends State<DesktopPanel> with ThemeHelpers {
                           textProcessing: (val) => val.toString().split(".").last,
                           title: "TitleBar Style",
                           subtitle:
-                              "Select the titlebar style. Native uses system window decorations and looks best on GNOME. Custom is necessary on non-GNOME systems and required for 'Minimize to Tray' to work correctly. Hidden removes all titlebar elements.",
+                              "Select the titlebar style. Native uses system window decorations and looks best on GNOME. Custom draws a single close button over the app. Hidden removes all titlebar elements.",
                           secondaryColor: headerColor,
                           leading: const SettingsLeadingIcon(
                             iosIcon: CupertinoIcons.macwindow,
@@ -165,50 +165,13 @@ class _DesktopPanelState extends State<DesktopPanel> with ThemeHelpers {
                             containerColor: Colors.orange,
                           ),
                         )),
-                  Obx(() {
-                    if (SettingsSvc.settings.titleBarStyle.value == BBTitleBarStyle.custom || !Platform.isLinux) {
-                      return Container(
-                        color: tileColor,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 15.0),
-                          child: SettingsDivider(color: context.theme.colorScheme.surfaceVariant),
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  }),
-                  Obx(() {
-                    if (SettingsSvc.settings.titleBarStyle.value == BBTitleBarStyle.custom || !Platform.isLinux) {
-                      return SettingsSwitch(
-                        onChanged: (bool val) async {
-                          SettingsSvc.settings.minimizeToTray.value = val;
-                          await SettingsSvc.settings.saveOneAsync('minimizeToTray');
-                        },
-                        initialVal: SettingsSvc.settings.minimizeToTray.value,
-                        title: "Minimize to Tray",
-                        subtitle: "When enabled, clicking the minimize button will minimize the app to the system tray",
-                        backgroundColor: tileColor,
-                        leading: const SettingsLeadingIcon(
-                          iosIcon: CupertinoIcons.tray_arrow_down,
-                          materialIcon: Icons.expand_circle_down_outlined,
-                          containerColor: Colors.indigo,
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  }),
-                  Obx(() {
-                    if (SettingsSvc.settings.titleBarStyle.value == BBTitleBarStyle.custom) {
-                      return Container(
-                        color: tileColor,
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 15.0),
-                          child: SettingsDivider(color: context.theme.colorScheme.surfaceVariant),
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  }),
+                  Container(
+                    color: tileColor,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 15.0),
+                      child: SettingsDivider(color: context.theme.colorScheme.surfaceVariant),
+                    ),
+                  ),
                   Obx(() => SettingsSwitch(
                         onChanged: (bool val) async {
                           SettingsSvc.settings.closeToTray.value = val;

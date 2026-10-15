@@ -68,38 +68,32 @@ class TitleBar extends StatelessWidget {
 class WindowButtons extends StatelessWidget {
   const WindowButtons({super.key});
 
+  static const double _buttonSize = 22;
+  static const double _sidePadding = 8;
+  static const double width = _buttonSize + _sidePadding * 2;
+
   @override
   Widget build(BuildContext context) {
-    WindowButtonColors buttonColors = WindowButtonColors(
-        iconNormal: context.theme.colorScheme.primary,
-        mouseOver: context.theme.colorScheme.primary,
-        mouseDown: context.theme.colorScheme.primaryContainer,
-        iconMouseOver: context.theme.colorScheme.onPrimary,
-        iconMouseDown: context.theme.colorScheme.onPrimaryContainer);
-
-    WindowButtonColors closeButtonColors = WindowButtonColors(
-        mouseOver: context.theme.colorScheme.errorContainer,
-        mouseDown: context.theme.colorScheme.onError,
-        iconNormal: context.theme.colorScheme.primary,
-        iconMouseOver: context.theme.colorScheme.onErrorContainer);
-    return Row(
-      children: [
-        MinimizeWindowButton(
-          colors: buttonColors,
-          onPressed: () async =>
-              SettingsSvc.settings.minimizeToTray.value ? await windowManager.hide() : await windowManager.minimize(),
-          animate: true,
-        ),
-        MaximizeWindowButton(
-          colors: buttonColors,
-          animate: true,
-        ),
-        CloseWindowButton(
-          colors: closeButtonColors,
+    final colorScheme = context.theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: _sidePadding),
+      child: Material(
+        type: MaterialType.transparency,
+        child: IconButton(
           onPressed: () async => await windowManager.close(),
-          animate: true,
+          icon: const Icon(Icons.close_rounded),
+          iconSize: 14,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: _buttonSize, height: _buttonSize),
+          style: IconButton.styleFrom(
+            shape: const CircleBorder(),
+            foregroundColor: colorScheme.onSurfaceVariant,
+            backgroundColor: colorScheme.onSurface.withValues(alpha: 0.08),
+            hoverColor: colorScheme.onSurface.withValues(alpha: 0.08),
+            highlightColor: colorScheme.onSurface.withValues(alpha: 0.12),
+          ),
         ),
-      ],
+      ),
     );
   }
 }

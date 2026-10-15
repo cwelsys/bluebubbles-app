@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:bluebubbles/app/wrappers/bb_scaffold.dart';
 import 'package:bitsdojo_window/bitsdojo_window.dart';
+import 'package:bluebubbles/app/wrappers/titlebar_wrapper.dart';
 import 'package:bluebubbles/app/layouts/findmy/findmy_controller.dart';
 import 'package:bluebubbles/app/layouts/findmy/widgets/findmy_devices_tab_view.dart';
 import 'package:bluebubbles/app/layouts/findmy/widgets/findmy_friends_tab_view.dart';
@@ -431,7 +432,7 @@ class _FindMyPageState extends State<FindMyPage> with SingleTickerProviderStateM
               filter: ImageFilter.blur(sigmaY: 2, sigmaX: 2),
               child: Container(
                   height: appWindow.titleBarHeight,
-                  width: appWindow.titleBarButtonSize.width * 3,
+                  width: WindowButtons.width,
                   color: context.theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)),
             ),
           ),
