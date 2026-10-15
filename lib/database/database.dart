@@ -160,6 +160,11 @@ class Database {
         await PrefsSvc.database.clearCustomPathConfig();
       }
 
+      if (Store.isOpen(objectBoxDirectory.path)) {
+        Logger.info("Attaching to the ObjectBox store already open at: ${objectBoxDirectory.path}");
+        store = Store.attach(getObjectBoxModel(), objectBoxDirectory.path);
+        return;
+      }
       Logger.info("Opening ObjectBox store from path: ${objectBoxDirectory.path}");
       store = await openStore(directory: objectBoxDirectory.path);
     } catch (e, s) {
