@@ -8,6 +8,7 @@ Contains migration scripts that run when the database version is incremented.
 |------|---------|
 | `message_handle_relationship_migration.dart` | Migrates legacy message→handle relationships to the new N:M `ToMany` schema |
 | `chat_latest_message_migration.dart` | Backfills `Chat.dbLatestMessage` / `dbOnlyLatestMessageDate` |
+| `tahoe_chat_guid_migration.dart` | Not version-gated: once the server reports macOS 26+, renames `iMessage;-;`/`SMS;-;` chats to Tahoe's `any;-;` GUIDs and merges chats sharing an address. Run from `ChatsService.init()` and after the startup server-details refresh |
 
 ## How Migrations Work
 1. `database.dart` stores `Database.version`

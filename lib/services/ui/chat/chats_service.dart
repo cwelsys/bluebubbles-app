@@ -22,6 +22,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart' hide Response;
 import 'package:universal_io/io.dart';
 import 'package:bluebubbles/database/database.dart';
+import 'package:bluebubbles/database/migrations/tahoe_chat_guid_migration.dart';
 import 'package:get_it/get_it.dart';
 
 // ignore: non_constant_identifier_names
@@ -309,6 +310,8 @@ class ChatsService {
 
     reset();
 
+    await TahoeChatGuidMigration.migrateIfNeeded();
+
     // Preload the saved default filter selection (if any) — independent of
     // chat count, so set this up unconditionally.
     _loadDefaultChatListFilters();
@@ -425,6 +428,18 @@ class ChatsService {
         );
       });
     }
+  }
+
+  Future<void> reloadForTahoeChatGuidsIfNeeded() async {
+    if (headless || !TahoeChatGuidMigration.isPending) return;
+    if (!hasChats.value && !loadedFirstChatBatch.value) return;
+    if (hasChats.value && !loadedAllChats.isCompleted) await loadedAllChats.future;
+    if (!TahoeChatGuidMigration.isPending) return;
+
+    final context = Get.context;
+    if (context != null && context.mounted) NavigationSvc.closeAllConversationView(context);
+    await setAllInactive();
+    await init(force: true);
   }
 
   /// Get ChatState for a specific chat GUID

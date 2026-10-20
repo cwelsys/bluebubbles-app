@@ -777,7 +777,15 @@ class Chat {
   }
 
   /// The messaging service this chat belongs to, derived from the GUID prefix.
-  ChatServiceType get service => ChatServiceType.fromGuid(guid);
+  ChatServiceType get service {
+    if (!guid.startsWith('any;')) return ChatServiceType.fromGuid(guid);
+
+    final services = (handles.isEmpty ? participants : handles).map((h) => h.service.toUpperCase()).toSet();
+    if (services.contains('IMESSAGE')) return ChatServiceType.iMessage;
+    if (services.contains('SMS')) return ChatServiceType.sms;
+    if (services.contains('RCS')) return ChatServiceType.rcs;
+    return ChatServiceType.iMessage;
+  }
 
   bool get isTextForwarding => service == ChatServiceType.sms;
 

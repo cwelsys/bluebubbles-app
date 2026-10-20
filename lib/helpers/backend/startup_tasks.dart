@@ -432,7 +432,7 @@ class StartupTasks {
     // Refresh server details in the background via the GlobalIsolate.
     // Error handling is inside refreshServerDetails(); no need to catch here.
     Logger.info("Refreshing server details in background...");
-    unawaited(SettingsSvc.refreshServerDetails());
+    unawaited(SettingsSvc.refreshServerDetails().then((_) => ChatsSvc.reloadForTahoeChatGuidsIfNeeded()));
 
     // Only register FCM device on startup
     // Don't await. Let this happen in background

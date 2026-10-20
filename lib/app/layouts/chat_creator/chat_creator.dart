@@ -491,7 +491,8 @@ class ChatCreatorState extends State<ChatCreator> with ThemeHelpers {
                             // server using the guessed GUID pattern before falling back to creation.
                             if (chat == null && selectedContacts.length == 1) {
                               final address = selectedContacts.first.address;
-                              final service = selectedService.value.method;
+                              final service =
+                                  SettingsSvc.serverDetails.isMinTahoe ? 'any' : selectedService.value.method;
                               chat = await ChatsSvc.fetchChat('$service;-;$address');
                             }
 

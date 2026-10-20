@@ -537,7 +537,8 @@ class ChatCreatorController extends StatefulController {
         Chat? serverChat;
         if (selectedContacts.length == 1) {
           final address = selectedContacts.first.address;
-          serverChat = await ChatsSvc.fetchChat('$method;-;$address');
+          final prefix = SettingsSvc.serverDetails.isMinTahoe ? 'any' : method;
+          serverChat = await ChatsSvc.fetchChat('$prefix;-;$address');
         }
 
         if (serverChat == null) {

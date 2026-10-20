@@ -8,6 +8,7 @@ class SharedPreferencesServerActions {
   static const String _privateApiEnableTipKey = 'private-api-enable-tip';
   static const String _serverUpdateCheckKey = 'server-update-check';
   static const String _clientUpdateCheckKey = 'client-update-check';
+  static const String _tahoeChatGuidMigrationKey = 'tahoe-chat-guid-migration';
 
   final SharedPreferencesService service;
 
@@ -57,5 +58,11 @@ class SharedPreferencesServerActions {
 
   Future<void> setClientUpdateCheckCode(String code) async {
     await service.i.setString(_clientUpdateCheckKey, code);
+  }
+
+  bool hasMigratedTahoeChatGuids() => service.i.getBool(_tahoeChatGuidMigrationKey) ?? false;
+
+  Future<void> markTahoeChatGuidsMigrated() async {
+    await service.i.setBool(_tahoeChatGuidMigrationKey, true);
   }
 }

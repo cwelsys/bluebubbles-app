@@ -110,4 +110,6 @@ class ServerDetails {
 
   /// macOS Sequoia (15.0) or newer.
   bool get isMinSequoia => macOSVersion >= 15;
+
+  bool get isMinTahoe => macOSVersion >= 26;
 }
