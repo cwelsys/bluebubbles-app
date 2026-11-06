@@ -4,6 +4,7 @@ import 'package:bluebubbles/app/state/attachment_state.dart';
 import 'package:bluebubbles/app/state/handle_state.dart';
 import 'package:bluebubbles/app/wrappers/stateful_boilerplate.dart';
 import 'package:bluebubbles/database/models.dart';
+import 'package:bluebubbles/helpers/ui/reaction_helpers.dart';
 import 'package:bluebubbles/services/services.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
@@ -73,9 +74,9 @@ class MessageState extends StatefulController {
   final RxBool isSent; // not temp guid
   final RxBool isReaction; // has associatedMessageGuid
 
-  /// Set to the part index that should play its bubble animation next frame.
+  /// Set to the message-part id that should play its bubble animation next frame.
   /// Consumers (BubbleEffects, TextBubble) wrap their animation trigger in Obx
-  /// and react when this equals their own part index.  Reset to null after
+  /// and react when this equals their own part id.  Reset to null after
   /// the animation has been kicked off so it can be retriggered later.
   final RxnInt playEffectPart = RxnInt(null);
 
@@ -125,6 +126,89 @@ class MessageState extends StatefulController {
   /// Reactive list of parsed message parts (text/attachments/edits/unsends).
   /// Populated by [buildMessageParts] in [onInit] and on content changes.
   final RxList<MessagePart> parts = <MessagePart>[].obs;
+
+  List<MessagePart>? _displayParts;
+  List<Object?>? _displayPartsKey;
+
+  /// [parts] as the conversation view renders them: runs of consecutive media-only parts collapsed into one
+  /// collection bubble ([MessagePart.collapseMediaCollections]).
+  ///
+  /// Memoized: the same [MessagePart] instances come back until [parts] changes in a way that affects
+  /// collapsing (a different part, or a change to its attachments, text, redaction or unsent flag), so
+  /// widgets and `MediaCollectionScope` can compare parts by identity. Reactive when read inside an Obx
+  /// (reads [parts]).
+  List<MessagePart> get displayParts {
+    final raw = parts.toList();
+    // Everything collapseMediaCollections reads: the part, its attachments (list, count and mime types), whether it
+    // has text, and the flags copied onto collapsed / per-attachment parts.
+    final key = <Object?>[
+      for (final p in raw) ...[
+        p,
+        p.attachments,
+        p.attachments.length,
+        ...p.attachments.map((a) => a.mimeStart),
+        p.text == null,
+        p.shouldRedact,
+        p.isUnsent,
+      ],
+    ];
+    if (_displayParts == null || !listEquals(key, _displayPartsKey)) {
+      _displayParts = List.unmodifiable(MessagePart.collapseMediaCollections(raw));
+      _displayPartsKey = key;
+    }
+    return _displayParts!;
+  }
+
+  /// Finds a part by its message-part id ([MessagePart.part]), not list index.
+  MessagePart? partById(int partId) {
+    final idx = parts.indexWhere((p) => p.part == partId);
+    return idx >= 0 ? parts[idx] : null;
+  }
+
+  /// Whether [p] is the leading bubble of this message (covers raw part 0).
+  ///
+  /// Uses [MessagePart.coversPartId]; collapsed galleries keep a span in
+  /// [MessagePart.attachmentPartIndices] and set [MessagePart.part] to the first id.
+  bool isLeadingMessagePart(MessagePart p) => p.coversPartId(0);
+
+  /// Whether [p] is the trailing bubble of this message (covers the last raw part id).
+  ///
+  /// Uses [parts] from [buildMessageParts] (not the collapsed UI list). Collapsed
+  /// galleries keep a span in [MessagePart.attachmentPartIndices] and set
+  /// [MessagePart.part] to the first id, so trailing is decided via [MessagePart.coversPartId].
+  bool isTrailingMessagePart(MessagePart p) {
+    if (parts.isEmpty) return true;
+    return p.coversPartId(parts.last.part);
+  }
+
+  /// Whether the message's subject bubble renders directly above [p] (subject sits above the leading part).
+  /// Reactive when read inside an Obx (reads [subject]).
+  bool hasSubjectAbove(MessagePart p) {
+    final subjectText = subject.value;
+    return isLeadingMessagePart(p) && subjectText != null && subjectText.isNotEmpty;
+  }
+
+  /// Tapbacks drawn on [part]'s bubble, matched against every raw part id it covers.
+  ///
+  /// When the message renders as a single bubble ([displayParts] has one entry) every tapback shows on it,
+  /// whatever part it targets. Reactive when read inside an Obx (reads [associatedMessages] and [parts]).
+  List<Message> tapbacksForBubble(MessagePart part) =>
+      _associatedForBubble(part, (e) => ReactionTypes.isTapback(e.associatedMessageType));
+
+  /// Stickers drawn on [part]'s bubble. Same matching rules as [tapbacksForBubble].
+  List<Message> stickersForBubble(MessagePart part) =>
+      _associatedForBubble(part, (e) => e.associatedMessageType == "sticker");
+
+  List<Message> _associatedForBubble(MessagePart part, bool Function(Message) test) {
+    final matches = associatedMessages.where(test);
+    if (displayParts.length == 1) return matches.toList();
+    return matches.where((e) => part.coversPartId(e.associatedMessagePart ?? 0)).toList();
+  }
+
+  /// Tapbacks targeting exactly the raw message-part id [partId] (one attachment inside a collection).
+  List<Message> tapbacksForPartId(int partId) => associatedMessages
+      .where((e) => ReactionTypes.isTapback(e.associatedMessageType) && (e.associatedMessagePart ?? 0) == partId)
+      .toList();
 
   /// Reactive state for the handle that sent this message.
   /// Null for outgoing messages or when no handle is attached.
@@ -220,7 +304,7 @@ class MessageState extends StatefulController {
 
   /// Signals that the bubble animation for [part] should play.
   /// [BubbleEffects] and [TextBubble] observe [playEffectPart] via ever() and
-  /// fire their animation when its value matches their own part index.
+  /// fire their animation when its value matches their own message-part id.
   /// Resetting to null first ensures re-triggering the same part always fires.
   void triggerBubbleEffect(int part) {
     if (playEffectPart.value == part) playEffectPart.value = null;

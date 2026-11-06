@@ -45,7 +45,8 @@ import 'package:screen_retriever/screen_retriever.dart';
 import 'package:secure_application/secure_application.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:tray_manager/tray_manager.dart';
+import 'package:tray_manager/tray_manager.dart'
+    show ContextMenuTrigger, ImageAsset, Menu, MenuItem, MenuItemClickedEvent, MenuItemType, TrayIcon, TrayIconClickedEvent;
 import 'package:universal_html/html.dart' as html;
 import 'package:universal_io/io.dart';
 import 'package:window_manager/window_manager.dart';
@@ -301,10 +302,10 @@ class DesktopWindowListener extends WindowListener {
   void onWindowEvent(String eventName) async {
     switch (eventName) {
       case "hide":
-        await setSystemTrayContextMenu(windowHidden: true);
+        updateSystemTrayToggle(windowHidden: true);
         break;
       case "show":
-        await setSystemTrayContextMenu(windowHidden: false);
+        updateSystemTrayToggle(windowHidden: false);
         break;
     }
   }
@@ -509,7 +510,7 @@ class Home extends StatefulWidget {
   State<Home> createState() => _HomeState();
 }
 
-class _HomeState extends State<Home> with WidgetsBindingObserver, TrayListener {
+class _HomeState extends State<Home> with WidgetsBindingObserver {
   final ReceivePort port = ReceivePort();
   bool serverCompatible = true;
   bool fullyLoaded = false;
@@ -597,8 +598,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver, TrayListener {
 
         /* ----- SYSTEM TRAY INITIALIZATION ----- */
         await initSystemTray();
-        // Linux runs on SNI instead of tray_manager, and drives its callbacks directly.
-        if (!Platform.isLinux) trayManager.addListener(this);
       }
 
       if (!SettingsSvc.settings.finishedSetup.value) {
@@ -614,42 +613,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver, TrayListener {
   }
 
   @override
-  void onTrayIconMouseDown() async {
-    await showAndFocusWindow();
-  }
-
-  @override
-  void onTrayIconRightMouseDown() async {
-    await trayManager.popUpContextMenu();
-  }
-
-  @override
-  void onTrayMenuItemClick(MenuItem menuItem) async {
-    switch (menuItem.key) {
-      case 'show_app':
-        await showAndFocusWindow();
-        break;
-      case 'hide_app':
-        await windowManager.hide();
-        break;
-      case 'close_app':
-        if (Platform.isLinux) exit(0);
-        await windowManager.setPreventClose(false);
-        await windowManager.close();
-        break;
-    }
-  }
-
-  @override
   void dispose() {
     // Clean up observer when app is fully closed
     WidgetsBinding.instance.removeObserver(this);
     windowManager.removeListener(DesktopWindowListener.instance);
-    if (Platform.isLinux) {
-      LinuxTray.dispose();
-    } else if (kIsDesktop) {
-      trayManager.removeListener(this);
-    }
+    if (Platform.isLinux) LinuxTray.dispose();
     super.dispose();
   }
 
@@ -712,22 +680,23 @@ class _HomeState extends State<Home> with WidgetsBindingObserver, TrayListener {
   }
 }
 
-Future<void> initSystemTray() async {
-  String path;
-  if (Platform.isWindows) {
-    path = 'assets/icon/icon.ico';
-  } else if (isFlatpak) {
-    path = 'app.bluebubbles.BlueBubbles';
-  } else if (isSnap) {
-    path = p.joinAll([p.dirname(Platform.resolvedExecutable), 'data/flutter_assets/assets/icon', 'icon.png']);
-  } else if (Platform.isLinux) {
-    // SNI resolves a theme icon name or an absolute path, never a relative asset path.
-    path = 'bluebubbles';
-  } else {
-    path = 'assets/icon/icon.png';
-  }
+// Kept for the app's lifetime: a garbage-collected TrayIcon removes the icon, and a collected MenuItem drops its
+// click listener.
+final List<Object> _trayHandles = [];
+MenuItem? _trayToggleItem;
+bool _trayWindowHidden = false;
 
+Future<void> initSystemTray() async {
   if (Platform.isLinux) {
+    String path;
+    if (isFlatpak) {
+      path = 'app.bluebubbles.BlueBubbles';
+    } else if (isSnap) {
+      path = p.joinAll([p.dirname(Platform.resolvedExecutable), 'data/flutter_assets/assets/icon', 'icon.png']);
+    } else {
+      // SNI resolves a theme icon name or an absolute path, never a relative asset path.
+      path = 'bluebubbles';
+    }
     await LinuxTray.init(
       iconName: path,
       title: 'BlueBubbles',
@@ -737,9 +706,50 @@ Future<void> initSystemTray() async {
     return;
   }
 
-  await trayManager.setIcon(path);
-  if (Platform.isWindows) await trayManager.setToolTip("BlueBubbles");
-  await setSystemTrayContextMenu(windowHidden: !appWindow.isVisible);
+  // Each call creates another icon, so a second one (Home's state rebuilt) would show two. Set only on success, so a
+  // failed attempt can be retried.
+  if (_trayToggleItem != null) return;
+
+  final trayIcon = TrayIcon.create();
+  final menu = Menu.create();
+  final toggleItem = MenuItem.createWithLabelAndType('Hide App', MenuItemType.normal);
+  final closeItem = MenuItem.createWithLabelAndType('Close App', MenuItemType.normal);
+  if (trayIcon == null || menu == null || toggleItem == null || closeItem == null) {
+    Logger.error("Failed to create the system tray icon", tag: "SystemTray");
+    return;
+  }
+
+  trayIcon.icon = ImageAsset.fromAsset(Platform.isWindows ? 'assets/icon/icon.ico' : 'assets/icon/icon.png');
+  trayIcon.setTooltip("BlueBubbles");
+  trayIcon.setContextMenuTrigger(ContextMenuTrigger.rightClicked);
+  trayIcon.addListener((event) async {
+    if (event is TrayIconClickedEvent) await showAndFocusWindow();
+  });
+
+  toggleItem.addListener((event) async {
+    if (event is! MenuItemClickedEvent) return;
+    if (_trayWindowHidden) {
+      await showAndFocusWindow();
+    } else {
+      await windowManager.hide();
+    }
+  });
+  closeItem.addListener((event) async {
+    if (event is! MenuItemClickedEvent) return;
+    await windowManager.setPreventClose(false);
+    await windowManager.close();
+  });
+
+  menu
+    ..addItem(toggleItem)
+    ..addSeparator()
+    ..addItem(closeItem);
+  trayIcon.setContextMenu(menu);
+  trayIcon.setVisible(true);
+
+  _trayHandles.addAll([trayIcon, menu, closeItem]);
+  _trayToggleItem = toggleItem;
+  updateSystemTrayToggle(windowHidden: !appWindow.isVisible);
 }
 
 List<LinuxTrayMenuItem> _linuxTrayMenu({bool windowHidden = false}) {
@@ -759,17 +769,11 @@ List<LinuxTrayMenuItem> _linuxTrayMenu({bool windowHidden = false}) {
   ];
 }
 
-Future<void> setSystemTrayContextMenu({bool windowHidden = false}) async {
+void updateSystemTrayToggle({required bool windowHidden}) {
   if (Platform.isLinux) {
-    await LinuxTray.setMenu(_linuxTrayMenu(windowHidden: windowHidden));
+    unawaited(LinuxTray.setMenu(_linuxTrayMenu(windowHidden: windowHidden)));
     return;
   }
-
-  await trayManager.setContextMenu(Menu(
-    items: [
-      MenuItem(label: windowHidden ? 'Show App' : 'Hide App', key: windowHidden ? 'show_app' : 'hide_app'),
-      MenuItem.separator(),
-      MenuItem(label: 'Close App', key: 'close_app'),
-    ],
-  ));
+  _trayWindowHidden = windowHidden;
+  _trayToggleItem?.label = windowHidden ? 'Show App' : 'Hide App';
 }
