@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:audio_waveforms/audio_waveforms.dart';
+import 'package:bluebubbles/app/layouts/conversation_view/widgets/message/interactive/open_pigeon_view.dart';
 import 'package:bluebubbles/app/components/custom/custom_bouncing_scroll_physics.dart';
 import 'package:bluebubbles/app/components/custom_text_editing_controllers.dart';
 import 'package:bluebubbles/app/layouts/conversation_view/dialogs/custom_mention_dialog.dart';
+import 'package:bluebubbles/app/layouts/conversation_view/widgets/media_picker/desktop_attachment_menu.dart';
 import 'package:bluebubbles/app/layouts/conversation_view/widgets/media_picker/text_field_attachment_picker.dart';
 import 'package:bluebubbles/app/layouts/conversation_view/widgets/text_field/picked_attachments_holder.dart';
 import 'package:bluebubbles/app/layouts/conversation_view/widgets/text_field/reply_holder.dart';
@@ -12,7 +14,6 @@ import 'package:bluebubbles/app/layouts/conversation_view/widgets/text_field/tex
 import 'package:bluebubbles/database/models.dart';
 import 'package:bluebubbles/helpers/helpers.dart';
 import 'package:bluebubbles/services/services.dart';
-import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -203,6 +204,7 @@ class TextFieldComponentState extends State<TextFieldComponent> {
                         textController: txtController,
                         initialAttachments: initialAttachments,
                       ),
+                    if (widget.controller != null) OpenPigeonPendingGame(controller: widget.controller!),
                     if (!isChatCreator)
                       Obx(() {
                         if (controller!.pickedAttachments.isNotEmpty && iOS) {
@@ -442,7 +444,11 @@ class TextFieldComponentState extends State<TextFieldComponent> {
                         },
                         onSubmitted: (String value) {
                           controller?.focusNode.requestFocus();
-                          if (isNullOrEmpty(value) && (controller?.pickedAttachments.isEmpty ?? false)) return;
+                          if (isNullOrEmpty(value) &&
+                              (controller?.pickedAttachments.isEmpty ?? false) &&
+                              controller?.pendingGame.value == null) {
+                            return;
+                          }
                           sendMessage.call();
                         },
                         contentInsertionConfiguration:
@@ -484,43 +490,32 @@ class TextFieldComponentState extends State<TextFieldComponent> {
         Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Padding(
             padding: const EdgeInsets.only(right: 10),
-            child: IconButton(
-              style: IconButton.styleFrom(
-                backgroundColor: context.theme.colorScheme.outline.withValues(alpha: 0.2),
-                shape: const CircleBorder(),
-                padding: EdgeInsets.zero,
-                minimumSize: const Size(36, 36),
-                fixedSize: const Size(36, 36),
-              ),
-              icon: Icon(
-                Icons.add,
-                color: context.theme.colorScheme.outline,
-                size: 22,
-              ),
-              visualDensity: Platform.isAndroid ? VisualDensity.compact : null,
-              onPressed: () async {
-                if (kIsDesktop) {
-                  final res = await fp.FilePicker.pickFiles();
-                  for (fp.PlatformFile e in res) {
-                    final size = await e.length() ?? 0;
-                    if (size / 1024000 > 1000) {
-                      showSnackbar("Error", "This file is over 1 GB! Please compress it before sending.",
-                          type: SnackbarType.error);
-                      continue;
-                    }
-                    controller!.pickedAttachments.add(PlatformFile(
-                      path: e.path,
-                      name: e.name,
-                      size: size,
-                      bytes: await e.readAsBytes(),
-                    ));
-                  }
-                } else {
-                  if (!_showAttachmentPickerLocal) FocusScope.of(context).unfocus();
-                  setState(() => _showAttachmentPickerLocal = !_showAttachmentPickerLocal);
-                }
-              },
-            ),
+            child: Builder(builder: (context) {
+              Widget button(VoidCallback onPressed) => IconButton(
+                    style: IconButton.styleFrom(
+                      backgroundColor: context.theme.colorScheme.outline.withValues(alpha: 0.2),
+                      shape: const CircleBorder(),
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(36, 36),
+                      fixedSize: const Size(36, 36),
+                    ),
+                    icon: Icon(
+                      Icons.add,
+                      color: context.theme.colorScheme.outline,
+                      size: 22,
+                    ),
+                    visualDensity: Platform.isAndroid ? VisualDensity.compact : null,
+                    onPressed: onPressed,
+                  );
+              // Desktop has no attachment sheet: `+` opens a menu of the same actions instead.
+              if (kIsDesktop) {
+                return DesktopAttachmentMenu(controller: controller!, builder: (_, toggle) => button(toggle));
+              }
+              return button(() {
+                if (!_showAttachmentPickerLocal) FocusScope.of(context).unfocus();
+                setState(() => _showAttachmentPickerLocal = !_showAttachmentPickerLocal);
+              });
+            }),
           ),
           Expanded(child: textInput),
         ]),

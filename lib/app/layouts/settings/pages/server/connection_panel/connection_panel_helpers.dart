@@ -182,7 +182,9 @@ mixin ConnectionPanelHelpersMixin {
         return l != null ? '$l ms' : '—';
       case 'serverVersion':
         if (redact) return 'Redacted';
-        final v = controller.serverDetails.value.serverVersion;
+        final details = controller.serverDetails.value;
+        // A v2 server's server_version is its 1.x feature level, so show the real build instead
+        final v = details.serverBuildVersion ?? details.serverVersion;
         return v.isNotEmpty ? v : '—';
       case 'macosVersion':
         if (redact) return 'Redacted';
@@ -518,6 +520,7 @@ mixin ConnectionPanelHelpersMixin {
               onTap: () async {
                 await fdb.fetchFirebaseConfig();
                 String? newUrl = await fdb.fetchNewUrl(restartSocket: false);
+                if (newUrl != null) NetworkTasks.setOriginOverride(null);
                 showSnackbar("Notice", "Fetched URL: $newUrl");
                 SocketSvc.restartSocket();
               },

@@ -220,7 +220,7 @@ class NotificationsService {
     final contactName = message.handleRelation.target?.displayName ?? "Unknown";
     final title = isGroup ? (ChatsSvc.getChatState(chat.guid)?.title.value ?? chat.getTitle()) : contactName;
     final text = hideContent ? "iMessage" : message.getNotificationText();
-    final isReaction = !isNullOrEmpty(message.associatedMessageGuid);
+    final isReaction = message.isReaction;
 
     if (kIsWeb && Notification.permission == "granted") {
       final chatIcon = await avatarAsBytes(chat: chat, quality: 256);
@@ -248,7 +248,7 @@ class NotificationsService {
             : await avatarAsBytes(
                 participantsOverride: !chat.isGroup
                     ? null
-                    : chat.handles.where((e) => e.address == message.handleRelation.target?.address).toList(),
+                    : chat.people.where((e) => e.address == message.handleRelation.target?.address).toList(),
                 chat: chat,
                 quality: 256);
         if (chatIcon.isEmpty) chatIcon = personIcon;
@@ -257,7 +257,7 @@ class NotificationsService {
         // Determine if reaction action should be shown (only if Private API is enabled & not a reaction message)
         final bool showReactionAction = SettingsSvc.settings.enablePrivateAPI.value &&
             SettingsSvc.settings.notificationReactionAction.value &&
-            message.associatedMessageGuid == null;
+            !message.isReaction;
         final String reactionType = SettingsSvc.settings.notificationReactionActionType.value;
 
         await GetIt.I.isReady<MethodChannelService>();
@@ -548,7 +548,7 @@ class NotificationsService {
   /// and custom avatars get a generated composite written to a temp file, or to
   /// [persistPath] when the file must outlive this run (appTemp is wiped on startup).
   Future<(String, bool)> _chatAvatarPath(Chat chat, {String? persistPath}) async {
-    if (chat.handles.length == 1 && chat.customAvatarPath == null) {
+    if (chat.people.length == 1 && chat.customAvatarPath == null) {
       final avatarPath = chat.handles.first.contactsV2.map((c) => c.avatarPath).nonNulls.firstOrNull;
       // A reserved character in the file name means a row written before avatar
       // names were sanitized (macOS contact IDs end in `:ABPerson`). Windows can

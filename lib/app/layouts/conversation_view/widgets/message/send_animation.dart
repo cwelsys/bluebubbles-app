@@ -72,8 +72,8 @@ class _SendAnimationState extends CustomState<SendAnimation, SendData, Conversat
     return _typingIndicatorFallbackHeight;
   }
 
-  // Offset for smart reply row when it is visible.
-  double get _smartReplyOffset => controller.showSmartReplyRow.value ? controller.smartReplyRowHeight.value : 0;
+  // Offset for the pill row (smart replies and quick actions) when it is visible.
+  double get _pillRowOffset => controller.showPillRow.value ? controller.pillRowHeight.value : 0;
 
   // Snapshot of _liveBottomOffset taken when a send animation starts, and cleared
   // when the bubble is torn down. Null whenever no send is in flight.
@@ -98,7 +98,7 @@ class _SendAnimationState extends CustomState<SendAnimation, SendData, Conversat
       focusInfoSize +
       _textFieldVerticalPadding +
       _typingIndicatorOffset +
-      _smartReplyOffset +
+      _pillRowOffset +
       _platformVerticalOffset;
 
   @override
@@ -157,19 +157,39 @@ class _SendAnimationState extends CustomState<SendAnimation, SendData, Conversat
     super.dispose();
   }
 
+  Attachment _outgoingAttachment(PlatformFile file) => Attachment(
+        isOutgoing: true,
+        mimeType: mime(file.path) ?? mime(file.name),
+        uti: "public.jpg",
+        transferName: file.name,
+        totalBytes: file.size,
+        // Store the original source path in metadata so prepAttachments can copy it.
+        // For bytes-only files (clipboard/GIF keyboard), store bytes in the transient field
+        // so prepAttachments can write them to disk.
+        metadata: file.path != null ? {'source_path': file.path} : null,
+        bytes: file.path == null ? file.bytes : null,
+      );
+
   Future<void> send(SendData data) async {
     // do not add anything above this line, the attachments must be extracted first
     final attachments = List<PlatformFile>.from(data.attachments);
     // text is mutable — reassigned during mention processing below
     String text = data.text;
-    // Hide the smart reply row immediately, before the send animation's target
-    // is computed below. Otherwise the row disappears mid-flight (once the
-    // outgoing message is inserted and messages_view.dart clears the smart
-    // reply suggestions), shrinking _animationBottomOffset while
-    // AnimatedPositioned is still animating toward the old, taller target —
-    // which is what caused the bubble to land too high and snap back down.
-    if (controller.showSmartReplyRow.value) {
-      controller.updateSmartReplyLayout(visible: false, height: 0);
+    // The pill row holds two kinds of pill. Smart replies are ML suggestions and
+    // are cleared once the outgoing message is inserted; quick actions ("Attach
+    // recent photo", "Jump to oldest unread") are the app's own and survive a
+    // send.
+    //
+    // A row of only smart replies is about to disappear, so hide it now, before
+    // the landing target is computed below. Otherwise it vanishes mid-flight,
+    // shrinking _animationBottomOffset while AnimatedPositioned is still heading
+    // for the old, taller target, and the bubble lands too high and snaps down.
+    //
+    // A row with any quick action keeps its height through the send, so that
+    // height has to stay in the target or the bubble lands a row too low and
+    // hops up.
+    if (controller.showPillRow.value && !controller.pillRowHasQuickActions) {
+      controller.updatePillRowLayout(visible: false, height: 0);
     }
     if (SettingsSvc.settings.scrollToBottomOnSend.value) {
       await controller.scrollToBottom();
@@ -191,20 +211,35 @@ class _SendAnimationState extends CustomState<SendAnimation, SendData, Conversat
       }
     }
 
-    for (int i = 0; i < attachments.length; i++) {
-      final file = attachments[i];
-      final attachment = Attachment(
-        isOutgoing: true,
-        mimeType: mime(file.path) ?? mime(file.name),
-        uti: "public.jpg",
-        transferName: file.name,
-        totalBytes: file.size,
-        // Store the original source path in metadata so prepAttachment can copy it.
-        // For bytes-only files (clipboard/GIF keyboard), store bytes in the transient field
-        // so prepAttachment can write them to disk.
-        metadata: file.path != null ? {'source_path': file.path} : null,
-        bytes: file.path == null ? file.bytes : null,
+    // Several files go as one message, as in Messages, when the server can
+    final sendTogether = attachments.length > 1 &&
+        !data.isAudioMessage &&
+        attachments.every((f) => f.balloonBundleId == null) &&
+        SettingsSvc.canSendAttachmentsTogether;
+    if (sendTogether) {
+      final message = Message(
+        text: "",
+        dateCreated: DateTime.now(),
+        hasAttachments: true,
+        isFromMe: true,
+        handleId: 0,
+        threadOriginatorGuid: data.replyGuid,
+        threadOriginatorPart: "${data.replyPart ?? 0}:0:0",
+        expressiveSendStyleId: data.effectId,
       );
+      message.generateTempGuid();
+      await OutgoingMsgHandler.queue(
+        OutgoingMultiAttachment(
+          chat: controller.chat,
+          message: message,
+          attachments: attachments.map(_outgoingAttachment).toList(),
+        ),
+      );
+    }
+
+    for (int i = 0; !sendTogether && i < attachments.length; i++) {
+      final file = attachments[i];
+      final attachment = _outgoingAttachment(file);
 
       final message = Message(
         text: "",
@@ -316,8 +351,8 @@ class _SendAnimationState extends CustomState<SendAnimation, SendData, Conversat
       setState(() {
         // Freeze the landing target for the whole flight. Computed here rather
         // than in build() so it reflects the layout at the moment of the send —
-        // notably after updateSmartReplyLayout() above has already zeroed the
-        // smart reply row.
+        // notably after updatePillRowLayout() above has already zeroed a pill
+        // row that won't survive the send.
         _frozenBottomOffset = _liveBottomOffset;
         tween = Tween<double>(
           begin: 0.9,

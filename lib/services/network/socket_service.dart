@@ -4,7 +4,6 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:bluebubbles/helpers/backend/settings_helpers.dart';
-import 'package:bluebubbles/utils/crypto_utils.dart';
 import 'package:bluebubbles/utils/logger/logger.dart';
 import 'package:bluebubbles/helpers/helpers.dart';
 import 'package:bluebubbles/services/services.dart';
@@ -76,8 +75,8 @@ class SocketService {
   /// rediscovery is the only recovery from [_socketGaveUp].
   static const Duration _urlDiscoveryTimeout = Duration(seconds: 60);
 
-  /// The server's engine.io heartbeat takes up to three minutes to notice a dead connection
-  /// and can't change until the server rewrite, so the client runs its own.
+  /// 1.x's engine.io heartbeat takes up to three minutes to notice a dead connection, so the client runs its own.
+  /// v2 answers it too: `get-fcm-client` with an ack is the one client-sent event it handles.
   static const Duration _heartbeatInterval = Duration(seconds: 30);
   static const Duration _heartbeatTimeout = Duration(seconds: 5);
   static const int _heartbeatMissLimit = 2;
@@ -488,8 +487,8 @@ class SocketService {
   }
 
   /// Called on every connection error, and on a disconnect socket.io won't retry.
-  /// socket.io is normally already retrying on its own schedule, so all this does
-  /// is start the clock on "maybe the server moved".
+  /// A failed LAN connection falls back to the remote URL immediately. Remote
+  /// failures leave socket.io retrying and start the URL discovery timer.
   ///
   /// Errors arrive several times per failed attempt, so this is deliberately
   /// idempotent: the first one arms the timer and the rest are ignored until that
@@ -500,6 +499,11 @@ class SocketService {
     // to discover — and arming anyway would log a failure per cycle throughout
     // first-run setup, when having no server address yet is the expected state.
     if (!SettingsSvc.settings.finishedSetup.value) return;
+    if (HttpSvc.originOverride != null) {
+      NetworkTasks.setOriginOverride(null);
+      restartSocket();
+      return;
+    }
     if (_urlDiscoveryTimer != null || _urlDiscoveryInProgress) return;
     _scheduleUrlDiscovery();
   }
@@ -657,6 +661,7 @@ class SocketService {
       // One late ack on a slow link isn't enough to throw away a working socket; retry straight away.
       if (++_heartbeatMisses < _heartbeatMissLimit) return _sendHeartbeat();
       Logger.warn(tag: _tag, "Server missed $_heartbeatMisses heartbeats in a row — rebuilding socket");
+      NetworkTasks.setOriginOverride(null);
       restartSocket();
     });
 
@@ -668,28 +673,6 @@ class SocketService {
       _heartbeatTimeoutTimer = null;
       _heartbeatMisses = 0;
     });
-  }
-
-  // ── Messaging ──────────────────────────────────────────────────────────────
-
-  Future<Map<String, dynamic>> sendMessage(String event, Map<String, dynamic> message) {
-    if (socket == null) return Future.error(StateError('Socket not connected'));
-    final completer = Completer<Map<String, dynamic>>();
-
-    socket!.emitWithAck(event, message, ack: (response) {
-      if (response['encrypted'] == true) {
-        response['data'] = jsonDecode(decryptAESCryptoJS(response['data'], password));
-      }
-
-      if (!completer.isCompleted) {
-        completer.complete(response);
-      }
-    });
-
-    return completer.future.timeout(
-      const Duration(seconds: 30),
-      onTimeout: () => Future.error(TimeoutException('Socket message timed out', const Duration(seconds: 30))),
-    );
   }
 
   // ── State reporting ────────────────────────────────────────────────────────
