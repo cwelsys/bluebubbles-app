@@ -916,12 +916,23 @@ class Message {
       existing.dateDeleted = newMessage.dateDeleted;
     }
 
+    // Sync queries can bring back an edit or unsend of a message already stored.
+    // Its text may be null and its body empty, so copy the whole edited snapshot.
+    if (newMessage.dateEdited != null &&
+        (existing.dateEdited == null || !newMessage.dateEdited!.isBefore(existing.dateEdited!))) {
+      existing.dateEdited = newMessage.dateEdited;
+      existing.text = newMessage.text;
+      existing.subject = newMessage.subject;
+      existing.attributedBody = newMessage.attributedBody;
+      existing.messageSummaryInfo = newMessage.messageSummaryInfo;
+    }
+
     // Also update attributedBody / messageSummaryInfo when the existing record
     // has no data but the incoming message does (independent of edit date).
-    if (!isNullOrEmpty(newMessage.attributedBody)) {
+    if (existing.dateEdited == null && !isNullOrEmpty(newMessage.attributedBody)) {
       existing.attributedBody = newMessage.attributedBody;
     }
-    if (!isNullOrEmpty(newMessage.messageSummaryInfo)) {
+    if (existing.dateEdited == null && !isNullOrEmpty(newMessage.messageSummaryInfo)) {
       existing.messageSummaryInfo = newMessage.messageSummaryInfo;
     }
 
@@ -969,9 +980,13 @@ class Message {
       existing.dbAttachments.addAll(newMessage.dbAttachments);
     }
 
-    if (existing.payloadData == null && newMessage.payloadData != null) {
+    // Fills in what a push copy saved first left out.
+    if ((existing.payloadData == null && newMessage.payloadData != null) ||
+        (!existing.payloadData.hasAppSession && newMessage.payloadData.hasAppSession)) {
       existing.payloadData = newMessage.payloadData;
     }
+    existing.threadOriginatorPart ??= newMessage.threadOriginatorPart;
+    existing.country ??= newMessage.country;
 
     existing.associatedMessageEmoji ??= newMessage.associatedMessageEmoji;
 
@@ -1043,6 +1058,37 @@ class Message {
 
     return false;
   }
+
+  /// Takes [incoming]'s values for the fields a push copy can leave out (the server trims it to fit FCM's 4KB limit),
+  /// keeping this message's own where [incoming] has none. Every merge of an incoming copy into a stored one goes
+  /// through here so they agree; [Message.merge] (sync) has its own rules for full copies.
+  ///
+  /// Formatting and edit history are only kept while they still describe the text: a push copy of an edit has the new
+  /// text without them. So call this before this message takes [incoming]'s text and edit date.
+  void takeOmittableFieldsFrom(Message incoming) {
+    final sameContent = (incoming.text ?? text) == text &&
+        (incoming.dateEdited ?? dateEdited)?.millisecondsSinceEpoch == dateEdited?.millisecondsSinceEpoch;
+    if (incoming.attributedBody.isNotEmpty || !sameContent) attributedBody = incoming.attributedBody;
+    if (incoming.messageSummaryInfo.isNotEmpty || !sameContent) messageSummaryInfo = incoming.messageSummaryInfo;
+    // An app balloon's session is only in a full copy
+    if (incoming.payloadData.hasAppSession || !payloadData.hasAppSession) {
+      payloadData = incoming.payloadData ?? payloadData;
+    }
+    threadOriginatorPart = incoming.threadOriginatorPart ?? threadOriginatorPart;
+    datePlayed = incoming.datePlayed ?? datePlayed;
+    country = incoming.country ?? country;
+  }
+
+  /// Whether this copy has fields [stored] lacks of those a push copy leaves out, so replacing an equally recent
+  /// [stored] with it adds something.
+  bool fillsGapsIn(Message stored) =>
+      (attributedBody.isNotEmpty && stored.attributedBody.isEmpty) ||
+      (messageSummaryInfo.isNotEmpty && stored.messageSummaryInfo.isEmpty) ||
+      (payloadData != null && stored.payloadData == null) ||
+      (payloadData.hasAppSession && !stored.payloadData.hasAppSession) ||
+      (threadOriginatorPart != null && stored.threadOriginatorPart == null) ||
+      (datePlayed != null && stored.datePlayed == null) ||
+      (country != null && stored.country == null);
 
   Map<String, dynamic> toMap() {
     return {

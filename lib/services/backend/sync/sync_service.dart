@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:bluebubbles/database/database.dart';
 import 'package:bluebubbles/database/models.dart';
+import 'package:bluebubbles/helpers/types/helpers/misc_helpers.dart';
 import 'package:bluebubbles/helpers/ui/async_task.dart';
 import 'package:bluebubbles/helpers/ui/ui_helpers.dart';
 import 'package:bluebubbles/services/backend/interfaces/contact_v2_interface.dart';
@@ -30,6 +31,13 @@ class SyncService {
   static const int _dispatchChunkSize = 50;
   DateTime? _lastIncrementalSyncTimestamp;
 
+  // Desktop pulls every server contact with avatars, so incremental syncs refresh them at most daily.
+  static const Duration _serverContactSyncInterval = Duration(hours: 24);
+  DateTime? _lastServerContactSync;
+
+  /// The server that pull came from. Another server's contacts are pulled at once rather than after the day is up.
+  String? _lastServerContactSyncAddress;
+
   FullSyncManager? _manager;
   FullSyncManager? get fullSyncManager => _manager;
 
@@ -54,19 +62,29 @@ class SyncService {
     await _manager!.start();
   }
 
-  Future<void> startIncrementalSync({bool useGlobalIsolate = false}) async {
-    if (isIncrementalSyncing.value) return;
-
+  /// [catchUp]: a sync that must not be lost to the cooldown, because something may have been missed since the last
+  /// one started (the socket just connected, or a push copy the socket never replaced). If a sync is running or ran
+  /// within the cooldown, it runs once that's over instead of being skipped. Requests in the meantime share that one
+  /// run, so a burst of them still costs a single sync.
+  Future<void> startIncrementalSync({bool useGlobalIsolate = false, bool catchUp = false}) async {
     final now = DateTime.now();
-    if (_lastIncrementalSyncTimestamp != null &&
-        now.difference(_lastIncrementalSyncTimestamp!) < _incrementalSyncCooldown) {
-      Logger.debug(
-        'Skipping incremental sync... Last ran ${now.difference(_lastIncrementalSyncTimestamp!).inSeconds}s ago '
-        '(cooldown: ${_incrementalSyncCooldown.inSeconds}s)',
-        tag: 'Incremental Chat Sync',
-      );
+    final sinceLast = _lastIncrementalSyncTimestamp == null ? null : now.difference(_lastIncrementalSyncTimestamp!);
+    if (isIncrementalSyncing.value) {
+      // The running sync may have queried the server before what this is catching up on got there
+      if (catchUp) _scheduleCatchUp(_incrementalSyncCooldown - (sinceLast ?? Duration.zero), useGlobalIsolate);
       return;
     }
+    if (sinceLast != null && sinceLast < _incrementalSyncCooldown) {
+      Logger.debug(
+        'Skipping incremental sync... Last ran ${sinceLast.inSeconds}s ago '
+        '(cooldown: ${_incrementalSyncCooldown.inSeconds}s)${catchUp ? ', running it when the cooldown ends' : ''}',
+        tag: 'Incremental Chat Sync',
+      );
+      if (catchUp) _scheduleCatchUp(_incrementalSyncCooldown - sinceLast, useGlobalIsolate);
+      return;
+    }
+    _catchUpTimer?.cancel();
+    _catchUpTimer = null;
 
     _lastIncrementalSyncTimestamp = now;
     isIncrementalSyncing.value = true;
@@ -112,7 +130,11 @@ class SyncService {
           final messages = await runAsync(() => Database.messages.getMany(chunk).whereType<Message>().toList());
           for (final message in messages) {
             if (message.guid == null) continue;
-            await service.addNewMessage(message);
+            if (service.struct.getMessage(message.guid!) != null) {
+              service.updateMessage(message);
+            } else {
+              await service.addNewMessage(message);
+            }
             if (message.id != null) processedMessageIds.add(message.id!);
           }
         }
@@ -155,14 +177,18 @@ class SyncService {
 
         // Dispatch newly synced messages to any currently active chat view.
         // Skip messages already dispatched by a per-page event.
-        // MessagesService.addNewMessage() is a no-op if the message is already present,
-        // so this is safe even without the skip, but avoiding the call reduces churn.
+        // Existing messages need their receipt/edit state refreshed as well.
         for (final message in syncedMessages) {
           if (message.id != null && processedMessageIds.contains(message.id)) continue;
           final chatGuid = message.chat.target?.guid;
           if (chatGuid == null || message.guid == null) continue;
           if (Get.isRegistered<MessagesService>(tag: chatGuid)) {
-            unawaited(Get.find<MessagesService>(tag: chatGuid).addNewMessage(message));
+            final service = Get.find<MessagesService>(tag: chatGuid);
+            if (service.struct.getMessage(message.guid!) != null) {
+              service.updateMessage(message);
+            } else {
+              await service.addNewMessage(message);
+            }
           }
         }
       }
@@ -189,7 +215,21 @@ class SyncService {
       _lastIncrementalSyncTimestamp = null;
     }
 
-    final contactSyncResult = await performContactSyncToHandles();
+    var contactSyncResult = true;
+    if (!kIsDesktop) {
+      contactSyncResult = await performContactSyncToHandles();
+    } else if (!chatSyncFailed &&
+        (_lastServerContactSync == null ||
+            _lastServerContactSyncAddress != SettingsSvc.settings.serverAddress.value ||
+            now.difference(_lastServerContactSync!) >= _serverContactSyncInterval)) {
+      // A failed pull is swallowed in the isolate; a chat sync that reached the server stands in for its success
+      final address = SettingsSvc.settings.serverAddress.value;
+      contactSyncResult = await performContactSyncToHandles();
+      if (contactSyncResult) {
+        _lastServerContactSync = now;
+        _lastServerContactSyncAddress = address;
+      }
+    }
     final contactUploadResult = await performContactSyncToServer();
 
     // The chat sync is the one that matters, so its failure is reported alone and wins over the rest.
@@ -206,6 +246,19 @@ class SyncService {
     }
 
     isIncrementalSyncing.value = false;
+  }
+
+  /// The one pending catch-up sync, if a [startIncrementalSync] `catchUp` request was held off.
+  Timer? _catchUpTimer;
+
+  void _scheduleCatchUp(Duration wait, bool useGlobalIsolate) {
+    if (_catchUpTimer?.isActive ?? false) return;
+    // A sync still running past the cooldown is retried shortly after
+    final delay = wait > Duration.zero ? wait : const Duration(seconds: 5);
+    _catchUpTimer = Timer(delay, () {
+      _catchUpTimer = null;
+      unawaited(startIncrementalSync(useGlobalIsolate: useGlobalIsolate, catchUp: true));
+    });
   }
 
   Future<bool> performContactSyncToHandles() async {

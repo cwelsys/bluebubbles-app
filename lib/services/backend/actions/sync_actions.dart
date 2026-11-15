@@ -256,6 +256,7 @@ class SyncActions {
       final inputMsg = inputMessages[i];
       final msgData = messagesData[i];
       final existing = existingMap[inputMsg.guid];
+      inputMsg.isBookmarked = existing?.isBookmarked ?? inputMsg.isBookmarked;
       final msgToSave = existing != null ? Message.merge(existing, inputMsg) : inputMsg;
 
       // Wire to chat.
@@ -379,6 +380,7 @@ class SyncActions {
     for (final inputA in inputAttachments) {
       final existing = existingMap[inputA.guid];
       existing?.stickerPlacement ??= inputA.stickerPlacement;
+      existing?.takeFlagsFrom(inputA);
       final toSave = existing ?? inputA;
       final ownerGuid = ownerGuidByAttachmentGuid[inputA.guid];
       if (ownerGuid != null) {

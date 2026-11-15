@@ -666,6 +666,8 @@ class MessageState extends StatefulController {
   /// Update state from database message object
   /// Used when message is refreshed from DB or merged with updates
   void updateFromMessage(Message updatedMessage) {
+    // Before the text and edit date: whether formatting is kept depends on whether they changed
+    message.takeOmittableFieldsFrom(updatedMessage);
     // Update all observable fields
     updateGuidInternal(updatedMessage.guid);
     updateTextInternal(updatedMessage.text);
@@ -705,9 +707,7 @@ class MessageState extends StatefulController {
     // Merge other non-observable properties
     message.handleId = updatedMessage.handleId;
     message.otherHandle = updatedMessage.otherHandle;
-    message.country = updatedMessage.country;
     message.hasDdResults = updatedMessage.hasDdResults;
-    message.datePlayed = updatedMessage.datePlayed;
     message.itemType = updatedMessage.itemType;
     message.groupTitle = updatedMessage.groupTitle;
     message.groupActionType = updatedMessage.groupActionType;
@@ -715,13 +715,10 @@ class MessageState extends StatefulController {
     // Kept when the update lacks it, like Message.merge: only v2 servers send it, and the backfill fills it in later
     message.associatedMessageEmoji = updatedMessage.associatedMessageEmoji ?? message.associatedMessageEmoji;
     message.expressiveSendStyleId = updatedMessage.expressiveSendStyleId;
-    message.dateDeleted = updatedMessage.dateDeleted;
+    // A local delete isn't the server's to undo.
+    message.dateDeleted = updatedMessage.dateDeleted ?? message.dateDeleted;
     message.metadata = updatedMessage.metadata;
-    message.threadOriginatorPart = updatedMessage.threadOriginatorPart;
     message.bigEmoji = updatedMessage.bigEmoji;
-    message.attributedBody = updatedMessage.attributedBody;
-    message.messageSummaryInfo = updatedMessage.messageSummaryInfo;
-    message.payloadData = updatedMessage.payloadData;
     message.hasApplePayloadData = updatedMessage.hasApplePayloadData;
     message.isBookmarked = updatedMessage.isBookmarked;
 
@@ -886,7 +883,9 @@ class MessageState extends StatefulController {
   List<MessagePart> attributedBodyToMessagePart(AttributedBody body) {
     final mainString = body.string;
     final list = <MessagePart>[];
-    body.runs.sort((a, b) => a.range.first.compareTo(b.range.first));
+    final runs = body.runs.where((r) => r.range.length == 2 && r.range[0] >= 0 && r.range[1] > 0 &&
+        r.range[0] + r.range[1] <= mainString.length).toList()
+      ..sort((a, b) => a.range.first.compareTo(b.range.first));
     final inlineGuids = body.inlineRuns.map((e) => e.attributes!.attachmentGuid).toSet();
     final chatGuid = cvController?.chat.guid ?? ChatsSvc.activeChat?.chat.guid;
     Attachment? loadedAttachment(String guid) =>
@@ -894,11 +893,14 @@ class MessageState extends StatefulController {
         (chatGuid == null ? null : maybeFindMessagesSvc(chatGuid)?.struct.getAttachment(guid));
     // Synchronous on purpose: the caller assigns the parts as soon as this returns, so a part found after an await
     // was lost, and later runs of its part were built without it
-    for (final (i, e) in body.runs.indexed) {
-      if (e.attributes?.messagePart == null) continue;
+    int? lastPart;
+    for (final (i, e) in runs.indexed) {
+      // A run without a part number continues the part before it, as Messages reads it
+      final partNum = e.attributes?.messagePart ?? lastPart ?? 0;
+      lastPart = partNum;
       final isInline = inlineGuids.contains(e.attributes!.attachmentGuid);
       final attachment = e.isAttachment ? loadedAttachment(e.attributes!.attachmentGuid!) : null;
-      final existingPart = list.firstWhereOrNull((element) => element.part == e.attributes!.messagePart!);
+      final existingPart = list.firstWhereOrNull((element) => element.part == partNum);
       if (existingPart != null) {
         final currentLength = existingPart.text?.length ?? 0;
         // A U+FFFC without its Genmoji would shift the rest, so it's only kept with one
@@ -908,12 +910,8 @@ class MessageState extends StatefulController {
           existingPart.text = (existingPart.text ?? "") + newText;
         }
         if (inlineAttachment != null) existingPart.attachments.add(inlineAttachment);
-        if (e.hasMention) {
-          existingPart.mentions.add(Mention(
-            mentionedAddress: e.attributes?.mention,
-            range: [currentLength, currentLength + e.range.last],
-          ));
-          existingPart.mentions.sort((a, b) => a.range.first.compareTo(b.range.first));
+        if (!e.isAttachment || inlineAttachment != null) {
+          existingPart.runs.add(Run(range: [currentLength, e.range.last], attributes: e.attributes));
         }
       } else {
         // Not loaded: skipped, as the lost async lookup effectively did, rather than drawn as an empty part
@@ -923,15 +921,8 @@ class MessageState extends StatefulController {
           subject: i == 0 ? message.subject : null,
           text: e.isAttachment && !isInline ? null : mainString.substring(e.range.first, e.range.first + e.range.last),
           attachments: attachment != null ? [attachment] : [],
-          mentions: !e.hasMention
-              ? []
-              : [
-                  Mention(
-                    mentionedAddress: e.attributes?.mention,
-                    range: [0, e.range.last],
-                  )
-                ],
-          part: e.attributes!.messagePart!,
+          runs: e.isAttachment && !isInline ? [] : [Run(range: [0, e.range.last], attributes: e.attributes)],
+          part: partNum,
         ));
       }
     }
