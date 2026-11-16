@@ -1252,7 +1252,7 @@ class ChatsService {
 
   /// Toggle chat unread status with active chat awareness
   Future<Chat> _toggleChatHasUnread(Chat chat, bool hasUnread,
-      {bool force = false, bool clearLocalNotifications = true, bool privateMark = true}) async {
+      {bool force = false, bool clearLocalNotifications = true, bool privateMark = true, int? readBefore}) async {
     // Check if chat is active and adjust behavior
     final isActive = isChatActive(chat.guid);
 
@@ -1274,7 +1274,10 @@ class ChatsService {
 
     // Perform DB operation with adjusted parameters
     await chat.toggleHasUnreadAsync(hasUnread,
-        force: actualForce, clearLocalNotifications: actualClearNotifications, privateMark: actualPrivateMark);
+        force: actualForce,
+        clearLocalNotifications: actualClearNotifications,
+        privateMark: actualPrivateMark,
+        readBefore: readBefore);
 
     // Update service state
     updateChat(chat);
@@ -1359,6 +1362,7 @@ class ChatsService {
     bool force = false,
     bool clearLocalNotifications = true,
     bool privateMark = true,
+    int? readBefore,
   }) async {
     final state = getChatState(chat.guid);
 
@@ -1366,7 +1370,10 @@ class ChatsService {
 
     // Update DB with active chat awareness
     await _toggleChatHasUnread(chat, value,
-        force: force, clearLocalNotifications: clearLocalNotifications, privateMark: privateMark);
+        force: force,
+        clearLocalNotifications: clearLocalNotifications,
+        privateMark: privateMark,
+        readBefore: readBefore);
 
     // Update state if available
     state?.updateHasUnreadInternal(value);
