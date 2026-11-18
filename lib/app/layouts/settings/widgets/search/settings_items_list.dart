@@ -314,7 +314,6 @@ List<Widget> buildSettingItemList({
             "Pin Configuration",
             "Pin Rows",
             "Pins Per Row",
-            "Pinned Order",
             "Swipe Actions for Conversation Tiles",
             "Swipe Right Action",
             "Swipe Left Action",
@@ -420,8 +419,9 @@ List<Widget> buildSettingItemList({
               "Close to Tray",
               "Desktop Notifications",
               "Notification Sound Volume",
-              "Actions",
-              "Show Reply Field",
+              "Notification Layout",
+              "Notification Actions",
+              "Reply Field",
             ],
             onTap: () {
               ns.pushAndRemoveSettingsUntil(context, const DesktopPanel(), (Route route) => route.isFirst);

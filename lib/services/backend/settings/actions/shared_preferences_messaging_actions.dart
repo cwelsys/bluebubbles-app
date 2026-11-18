@@ -32,7 +32,13 @@ class SharedPreferencesMessagingActions {
 
   SharedPreferencesMessagingActions(this.service);
 
-  /// Tapback emoji used in [chatGuid], then everywhere else, each most used first and ties most recent first.
+  /// A sticker in the recent tapbacks, counted alongside the emoji: no emoji starts with this
+  static const String stickerTapbackPrefix = 'sticker:';
+
+  static String stickerTapbackKey(String stickerIdentifier) => '$stickerTapbackPrefix$stickerIdentifier';
+
+  /// Tapback emoji (and stickers, as [stickerTapbackKey]s) used in [chatGuid], then everywhere else, each most used
+  /// first and ties most recent first.
   List<String> getRecentTapbackEmojis({required String chatGuid}) => {
         ..._tapbackEmojiUsage(_chatTapbackEmojiKey(chatGuid)).map((u) => u.emoji),
         ..._tapbackEmojiUsage(_tapbackEmojiUsageKey).map((u) => u.emoji),
@@ -123,6 +129,10 @@ class SharedPreferencesMessagingActions {
 
   Future<void> setSeenSharedPhoto(String address, String hash) async {
     await service.i.setString('${_seenSharedPhotoPrefix}_$address', hash);
+  }
+
+  Future<void> clearSeenSharedPhoto(String address) async {
+    await service.i.remove('${_seenSharedPhotoPrefix}_$address');
   }
 
   String? getLastOpenedChat() => service.i.getString(_lastOpenedChatKey);

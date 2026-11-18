@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'dart:ui';
 
 import 'package:bluebubbles/app/components/avatars/contact_avatar_widget.dart';
@@ -44,8 +43,9 @@ class ReactionDetails extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final message = reactions[index];
                   final handle = message.handleRelation.target;
-                  final svg = SettingsSvc.settings.skin.value == Skins.iOS &&
-                      ReactionTypes.toList().contains(message.associatedMessageType);
+                  // A failed removal is drawn as the tapback it was taking back
+                  final type = ReactionTypes.addedType(message.associatedMessageType);
+                  final svg = ReactionTypes.toList().contains(type);
                   String? reactionName;
                   if (!SettingsSvc.settings.hideNamesForReactions.value) {
                     if (message.isFromMe!) {
@@ -96,28 +96,20 @@ class ReactionDetails extends StatelessWidget {
                         child: Padding(
                           padding: svg
                               ? const EdgeInsets.only(top: 8.0, left: 7.0, right: 7.0, bottom: 7.0)
-                                  .add(EdgeInsets.only(right: message.associatedMessageType == "emphasize" ? 1 : 0))
+                                  .add(EdgeInsets.only(right: type == "emphasize" ? 1 : 0))
                               : EdgeInsets.zero,
                           child: svg
-                              ? TapbackIcon(message.associatedMessageType!)
+                              ? TapbackIcon(type!)
                               : Center(
                                   child: Builder(builder: (context) {
                                     if (ReactionTypes.isStickerTapback(message.associatedMessageType)) {
                                       return StickerTapbackImage(attachment: message.dbAttachments.firstOrNull);
                                     }
-                                    final text = Text(
+                                    return Text(
                                       ReactionTypes.emojiFor(message),
                                       style: const TextStyle(fontSize: 18, fontFamily: 'Apple Color Emoji'),
                                       textAlign: TextAlign.center,
                                     );
-                                    if (message.associatedMessageType == "dislike") {
-                                      return Transform(
-                                        transform: Matrix4.identity()..rotateY(pi),
-                                        alignment: FractionalOffset.center,
-                                        child: text,
-                                      );
-                                    }
-                                    return text;
                                   }),
                                 ),
                         ),
