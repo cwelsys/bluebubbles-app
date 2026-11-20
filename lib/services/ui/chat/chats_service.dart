@@ -471,7 +471,6 @@ class ChatsService {
 
         final address = uri.path;
         final handle = Handle.findOne(addressAndService: HandleLookupKey(address, "iMessage"));
-        NavigationSvc.closeSettings(Get.context!);
         await NavigationSvc.pushAndRemoveUntil(
           Get.context!,
           NewChatCreator(
@@ -877,6 +876,7 @@ class ChatsService {
             MethodChannelSvc.actions.deleteNotification(
               notificationId: id,
               tag: NotificationsService.NEW_MESSAGE_TAG,
+              keepBubble: true,
             );
           }
         }

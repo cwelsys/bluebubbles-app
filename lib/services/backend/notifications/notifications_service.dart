@@ -4,7 +4,6 @@ import 'dart:math';
 
 import 'package:bluebubbles/app/layouts/conversation_view/pages/conversation_view.dart';
 import 'package:bluebubbles/app/layouts/settings/pages/scheduling/scheduled_messages_panel.dart';
-import 'package:bluebubbles/app/wrappers/theme_switcher.dart';
 import 'package:bluebubbles/helpers/helpers.dart';
 import 'package:bluebubbles/helpers/ui/facetime_helpers.dart';
 import 'package:bluebubbles/utils/logger/logger.dart';
@@ -12,7 +11,6 @@ import 'package:bluebubbles/database/models.dart';
 import 'package:bluebubbles/services/services.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' hide Notification;
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart' hide Message;
 import 'package:get/get.dart';
@@ -62,7 +60,7 @@ class NotificationsService {
   static int? aliasesToast;
   static String? aliasesToastText;
   static Map<String, int> facetimeNotifications = {};
-  static final Map<String, Timer> facetimeRingTimers = {};
+  static Map<String, Timer> facetimeTimeouts = {};
   static Map<String, int> activeToasts = {};
   static Map<String, Timer> debounceTimers = {};
   static Map<String, List<PendingToastItem>> pendingMessages = {};
@@ -71,6 +69,15 @@ class NotificationsService {
 
   static const int maxLines = 4;
   static const int charsPerLineEst = 40;
+
+  /// How long a desktop FaceTime toast can ring before it clears itself. Calls with a UUID are normally cleared by
+  /// the server's `disconnected` status, so this only covers a status event that never arrives.
+  static const Duration faceTimeToastTimeout = Duration(minutes: 2);
+
+  /// Calls without a UUID come from servers with FaceTime calling off, which never report the call being answered
+  /// or ended, so this timeout is the only way the toast closes. Kept short so it stops soon after the call is
+  /// answered elsewhere.
+  static const Duration legacyFaceTimeToastTimeout = Duration(seconds: 30);
 
   /// Windows toast identity. The toast icon is registered under the AUMID but only
   /// resolves when it matches the guid (flutter_local_notifications#2738), so one
@@ -304,7 +311,7 @@ class NotificationsService {
       // Desktop always notifies for inactive chats; this chat-list suppression is mobile-only.
       if (!kIsDesktop &&
           ChatsSvc.activeChat == null &&
-          Get.rawRoute?.settings.name == "/" &&
+          NavigationSvc.onChatList &&
           !SettingsSvc.settings.notifyOnChatList.value) {
         return;
       }
@@ -405,15 +412,15 @@ class NotificationsService {
 
     if (id != null) {
       facetimeNotifications[key] = id;
-      // A `critical` toast is never expired by the shell, and the legacy
-      // `incoming-facetime` event has no call UUID for a status change to clear it by.
-      facetimeRingTimers[key] =
-          Timer(DesktopNotifications.facetimeRingWindow, () => clearDesktopFaceTimeNotif(key));
+      facetimeTimeouts[key] = Timer(
+        callUuid == null ? legacyFaceTimeToastTimeout : faceTimeToastTimeout,
+        () => clearDesktopFaceTimeNotif(key),
+      );
     }
   }
 
   Future<void> clearDesktopFaceTimeNotif(String callerUuid) async {
-    facetimeRingTimers.remove(callerUuid)?.cancel();
+    facetimeTimeouts.remove(callerUuid)?.cancel();
     final int? id = facetimeNotifications.remove(callerUuid);
     if (id != null) await DesktopNotifications.cancel(id);
   }
@@ -765,23 +772,19 @@ class NotificationsService {
           failedToast = null;
           await showAndFocusWindow();
           if (scheduled) {
-            Navigator.of(Get.context!).push(
-              ThemeSwitcher.buildPageRoute(
-                builder: (BuildContext context) {
-                  return const ScheduledMessagesPanel();
-                },
-              ),
-            );
+            NavigationSvc.openSettings(initialPage: const ScheduledMessagesPanel());
           } else {
-            bool chatIsOpen = ChatsSvc.activeChat?.chat.guid == chat.guid;
-            if (!chatIsOpen) {
-            NavigationSvc.pushAndRemoveUntil(
-              Get.context!,
-              ConversationView(
-                chat: chat,
-              ),
-              (route) => route.isFirst,
-            );
+            if (ChatsSvc.activeChat?.chat.guid == chat.guid) {
+              // Still open under Settings or Find My: bring it back into view
+              NavigationSvc.closeSections();
+            } else {
+              NavigationSvc.pushAndRemoveUntil(
+                Get.context!,
+                ConversationView(
+                  chat: chat,
+                ),
+                (route) => route.isFirst,
+              );
             }
           }
         },
